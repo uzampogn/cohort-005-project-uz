@@ -366,7 +366,10 @@ function rateCourse(userId: number, courseId: number, rating: number) {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 const REFUND_WINDOW_DAYS = 14;
 const REFUND_WATCH_LIMIT_SECONDS = 2 * 60 * 60;
 const REFUND_COMPLETION_LIMIT = 0.5;
@@ -521,7 +524,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   let nextLessonId: number | null = null;
   let refundOffer: { amount: number; lastDayInWindow: string } | null = null;
 <<<<<<< HEAD
+<<<<<<< HEAD
   let openRefundRequest: { requestedAt: string } | null = null;
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 
@@ -529,6 +535,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     enrolled = isUserEnrolled(currentUserId, course.id);
 
     if (enrolled) {
+<<<<<<< HEAD
 <<<<<<< HEAD
       const refundCheck = getRefundEligibility(currentUserId, course.id);
       if (refundCheck?.eligibility.eligible) {
@@ -541,6 +548,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
           openRefundRequest = { requestedAt: openRequest.requestedAt };
         }
       }
+=======
+      refundOffer = getRefundOffer(currentUserId, { id: course.id });
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
       refundOffer = getRefundOffer(currentUserId, { id: course.id });
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
@@ -589,7 +599,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     userRating,
     refundOffer,
 <<<<<<< HEAD
+<<<<<<< HEAD
     openRefundRequest,
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
   };
@@ -694,7 +707,10 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
     userRating,
     refundOffer,
 <<<<<<< HEAD
+<<<<<<< HEAD
     openRefundRequest,
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
   } = loaderData;
@@ -933,14 +949,20 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
                   </Link>
                   <RateCourse userRating={userRating} />
 <<<<<<< HEAD
+<<<<<<< HEAD
                   {openRefundRequest ? (
                     <RefundRequested
                       requestedAt={openRefundRequest.requestedAt}
 =======
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
                   {refundOffer && (
                     <RequestRefund
                       slug={course.slug}
                       amount={refundOffer.amount}
+<<<<<<< HEAD
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
+=======
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
                     />
                   ) : (
@@ -1023,6 +1045,7 @@ function RateCourse({ userRating }: { userRating: number | null }) {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 function RefundRequested({ requestedAt }: { requestedAt: string }) {
   const requestedOn = new Date(requestedAt).toLocaleDateString("en-US", {
     year: "numeric",
@@ -1040,6 +1063,8 @@ function RefundRequested({ requestedAt }: { requestedAt: string }) {
   );
 }
 
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 function RequestRefund({ slug, amount }: { slug: string; amount: number }) {

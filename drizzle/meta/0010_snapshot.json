@@ -2,7 +2,11 @@
   "version": "6",
   "dialect": "sqlite",
 <<<<<<< HEAD
+<<<<<<< HEAD
   "id": "e7d538a3-9649-45ef-91bc-48e1cd27c4ec",
+=======
+  "id": "bbe49cdc-023b-49e7-bf7d-6cd92deac1b7",
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
   "id": "bbe49cdc-023b-49e7-bf7d-6cd92deac1b7",
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
@@ -1266,7 +1270,11 @@
           "notNull": true,
           "autoincrement": false,
 <<<<<<< HEAD
+<<<<<<< HEAD
           "default": "'requested'"
+=======
+          "default": "'open'"
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
           "default": "'open'"
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
@@ -1306,6 +1314,7 @@
           "notNull": false,
           "autoincrement": false
 <<<<<<< HEAD
+<<<<<<< HEAD
         },
         "decline_note": {
           "name": "decline_note",
@@ -1313,6 +1322,8 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
         }
