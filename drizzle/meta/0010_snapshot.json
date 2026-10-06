@@ -1,7 +1,11 @@
 {
   "version": "6",
   "dialect": "sqlite",
+<<<<<<< HEAD
   "id": "e7d538a3-9649-45ef-91bc-48e1cd27c4ec",
+=======
+  "id": "bbe49cdc-023b-49e7-bf7d-6cd92deac1b7",
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
   "prevId": "c9d21c71-b440-49a7-997b-a837eac0accd",
   "tables": {
     "categories": {
@@ -1261,7 +1265,11 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
+<<<<<<< HEAD
           "default": "'requested'"
+=======
+          "default": "'open'"
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
         },
         "reason": {
           "name": "reason",
@@ -1297,6 +1305,7 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+<<<<<<< HEAD
         },
         "decline_note": {
           "name": "decline_note",
@@ -1304,6 +1313,8 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
         }
       },
       "indexes": {

@@ -365,6 +365,128 @@ function rateCourse(userId: number, courseId: number, rating: number) {
     .get();
 }
 
+<<<<<<< HEAD
+=======
+const REFUND_WINDOW_DAYS = 14;
+const REFUND_WATCH_LIMIT_SECONDS = 2 * 60 * 60;
+const REFUND_COMPLETION_LIMIT = 0.5;
+
+function getPurchaseForCourse(userId: number, courseId: number) {
+  return db
+    .select()
+    .from(purchases)
+    .where(and(eq(purchases.userId, userId), eq(purchases.courseId, courseId)))
+    .orderBy(sql`${purchases.createdAt} desc`)
+    .get();
+}
+
+function getOpenRefundRequest(purchaseId: number) {
+  return db
+    .select({ id: refunds.id })
+    .from(refunds)
+    .where(
+      and(
+        eq(refunds.purchaseId, purchaseId),
+        eq(refunds.status, RefundStatus.Open)
+      )
+    )
+    .get();
+}
+
+function getCompletedLessonCount(userId: number, lessonIds: number[]) {
+  if (lessonIds.length === 0) return 0;
+
+  const result = db
+    .select({ count: sql<number>`count(*)` })
+    .from(lessonProgress)
+    .where(
+      and(
+        eq(lessonProgress.userId, userId),
+        eq(lessonProgress.status, LessonProgressStatus.Completed),
+        inArray(lessonProgress.lessonId, lessonIds)
+      )
+    )
+    .get();
+
+  return result?.count ?? 0;
+}
+
+function getSecondsWatched(userId: number, lessonIds: number[]) {
+  if (lessonIds.length === 0) return 0;
+
+  const furthestPerLesson = db
+    .select({
+      furthest: sql<number>`max(${videoWatchEvents.positionSeconds})`,
+    })
+    .from(videoWatchEvents)
+    .where(
+      and(
+        eq(videoWatchEvents.userId, userId),
+        inArray(videoWatchEvents.lessonId, lessonIds)
+      )
+    )
+    .groupBy(videoWatchEvents.lessonId)
+    .all();
+
+  return furthestPerLesson.reduce((total, row) => total + row.furthest, 0);
+}
+
+// Compare whole days, not hours — a purchase at 23:00 should still get its
+// full fourteenth day.
+function asDayString(when: Date) {
+  const year = when.getFullYear();
+  const month = String(when.getMonth() + 1).padStart(2, "0");
+  const day = String(when.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * What the learner is offered if they want their money back, or null if this
+ * purchase cannot be refunded.
+ */
+function getRefundOffer(userId: number, course: { id: number }) {
+  const purchase = getPurchaseForCourse(userId, course.id);
+
+  if (!purchase) return null;
+  if (getOpenRefundRequest(purchase.id)) return null;
+
+  const purchasedDay = asDayString(new Date(purchase.createdAt));
+  const windowEnd = new Date(purchase.createdAt);
+  windowEnd.setDate(windowEnd.getDate() + REFUND_WINDOW_DAYS);
+  const lastDayInWindow = asDayString(windowEnd);
+  const todayDay = asDayString(new Date());
+  const isWithinWindow =
+    todayDay >= purchasedDay && todayDay <= lastDayInWindow;
+
+  if (!isWithinWindow) return null;
+
+  const lessonIds = getCourseLessonIds(course.id);
+
+  if (lessonIds.length > 0) {
+    const completedCount = getCompletedLessonCount(userId, lessonIds);
+    if (completedCount / lessonIds.length >= REFUND_COMPLETION_LIMIT) {
+      return null;
+    }
+  }
+
+  if (getSecondsWatched(userId, lessonIds) >= REFUND_WATCH_LIMIT_SECONDS) {
+    return null;
+  }
+
+  const claimedSeat = db
+    .select({ id: coupons.id })
+    .from(coupons)
+    .where(
+      and(eq(coupons.purchaseId, purchase.id), isNotNull(coupons.redeemedAt))
+    )
+    .get();
+
+  if (claimedSeat) return null;
+
+  return { amount: purchase.amountPaid, lastDayInWindow };
+}
+
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 const ratingSchema = z.object({
   rating: z.coerce.number().int().min(MIN_RATING).max(MAX_RATING),
 });
@@ -398,12 +520,16 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   let lessonProgressMap: Record<number, string> = {};
   let nextLessonId: number | null = null;
   let refundOffer: { amount: number; lastDayInWindow: string } | null = null;
+<<<<<<< HEAD
   let openRefundRequest: { requestedAt: string } | null = null;
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 
   if (currentUserId) {
     enrolled = isUserEnrolled(currentUserId, course.id);
 
     if (enrolled) {
+<<<<<<< HEAD
       const refundCheck = getRefundEligibility(currentUserId, course.id);
       if (refundCheck?.eligibility.eligible) {
         const { amount, lastDayInWindow } = refundCheck.eligibility;
@@ -415,6 +541,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
           openRefundRequest = { requestedAt: openRequest.requestedAt };
         }
       }
+=======
+      refundOffer = getRefundOffer(currentUserId, { id: course.id });
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 
       progress = calculateProgress(currentUserId, course.id, false);
 
@@ -459,7 +588,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     ratingSummary,
     userRating,
     refundOffer,
+<<<<<<< HEAD
     openRefundRequest,
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
   };
 }
 
@@ -561,7 +693,10 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
     ratingSummary,
     userRating,
     refundOffer,
+<<<<<<< HEAD
     openRefundRequest,
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
   } = loaderData;
   const isInstructor = currentUserId === course.instructorId;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -797,9 +932,16 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
                     </Button>
                   </Link>
                   <RateCourse userRating={userRating} />
+<<<<<<< HEAD
                   {openRefundRequest ? (
                     <RefundRequested
                       requestedAt={openRefundRequest.requestedAt}
+=======
+                  {refundOffer && (
+                    <RequestRefund
+                      slug={course.slug}
+                      amount={refundOffer.amount}
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
                     />
                   ) : (
                     refundOffer && (
@@ -880,6 +1022,7 @@ function RateCourse({ userRating }: { userRating: number | null }) {
   );
 }
 
+<<<<<<< HEAD
 function RefundRequested({ requestedAt }: { requestedAt: string }) {
   const requestedOn = new Date(requestedAt).toLocaleDateString("en-US", {
     year: "numeric",
@@ -897,6 +1040,8 @@ function RefundRequested({ requestedAt }: { requestedAt: string }) {
   );
 }
 
+=======
+>>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 function RequestRefund({ slug, amount }: { slug: string; amount: number }) {
   const fetcher = useFetcher<{ errors?: Record<string, string> }>();
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -918,7 +1063,7 @@ function RequestRefund({ slug, amount }: { slug: string; amount: number }) {
           className="w-full text-muted-foreground"
           onClick={() => setIsFormOpen(true)}
         >
-          Cancel my purchase
+          Request a refund
         </Button>
       </div>
     );
@@ -926,7 +1071,7 @@ function RequestRefund({ slug, amount }: { slug: string; amount: number }) {
 
   return (
     <div className="border-t pt-4">
-      <p className="mb-2 text-sm font-medium">Cancel my purchase</p>
+      <p className="mb-2 text-sm font-medium">Request a refund</p>
       <p className="mb-3 text-xs text-muted-foreground">
         This raises a Refund Request for {formatPrice(amount)}, the amount you
         paid. Our team reviews it and emails you when it is done.
@@ -944,7 +1089,7 @@ function RequestRefund({ slug, amount }: { slug: string; amount: number }) {
         />
         <div className="flex gap-2">
           <Button type="submit" size="sm" disabled={isSubmitting}>
-            {isSubmitting ? "Sending..." : "Cancel my purchase"}
+            {isSubmitting ? "Sending..." : "Request a refund"}
           </Button>
           <Button
             type="button"
