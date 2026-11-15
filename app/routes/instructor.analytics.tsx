@@ -37,6 +37,7 @@ import {
   users,
 } from "~/db/schema";
 import { splitRevenue, type AnalyticsRange } from "~/lib/analytics";
+import { notRefunded } from "~/lib/analytics.server";
 import { getDiscountForCountry } from "~/lib/ppp";
 import {
   ANALYTICS_RANGES,
@@ -218,7 +219,10 @@ function scopeOn(
 }
 
 function purchaseScope(instructorId: number | null, range: AnalyticsRange) {
-  return scopeOn(purchases.createdAt, instructorId, range);
+  return and(
+    scopeOn(purchases.createdAt, instructorId, range),
+    notRefunded()
+  );
 }
 
 function sinceRange(dateColumn: SQLiteColumn, range: AnalyticsRange) {
@@ -263,6 +267,7 @@ function getStudentRevenue(
       and(
         inArray(purchases.userId, studentIds),
         notExists(mintedSeats),
+        notRefunded(),
         ownedBy(instructorId)
       )
     )
@@ -287,7 +292,11 @@ function getStudentRevenue(
     .innerJoin(courses, eq(purchases.courseId, courses.id))
     .innerJoin(seatCounts, eq(seatCounts.purchaseId, coupons.purchaseId))
     .where(
-      and(inArray(coupons.redeemedByUserId, studentIds), ownedBy(instructorId))
+      and(
+        inArray(coupons.redeemedByUserId, studentIds),
+        notRefunded(),
+        ownedBy(instructorId)
+      )
     )
     .groupBy(coupons.redeemedByUserId)
     .all();
@@ -743,7 +752,8 @@ function getCourseRevenueByCountry(
     .where(
       and(
         eq(purchases.courseId, courseId),
-        sinceRange(purchases.createdAt, range)
+        sinceRange(purchases.createdAt, range),
+        notRefunded()
       )
     )
     .groupBy(purchases.country)

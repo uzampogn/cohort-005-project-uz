@@ -249,8 +249,12 @@ export const refunds = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
     resolvedAt: text("resolved_at"),
     resolvedByUserId: integer("resolved_by_user_id").references(() => users.id),
+    // Set only on a decline: the Admin's explanation, which the Learner reads.
+    declineNote: text("decline_note"),
   },
-  (table) => [index("refunds_purchase_idx").on(table.purchaseId)]
+  // One Refund Request per Purchase, ever — enforced here so two submissions
+  // arriving at once cannot both land.
+  (table) => [uniqueIndex("refunds_purchase_unique").on(table.purchaseId)]
 );
 
 export const teams = sqliteTable("teams", {

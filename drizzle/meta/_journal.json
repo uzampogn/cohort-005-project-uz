@@ -71,6 +71,20 @@
       "when": 1790083397130,
       "tag": "0009_clear_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794748872563,
+      "tag": "0010_military_mephistopheles",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1794751451716,
+      "tag": "0011_wakeful_thunderball",
+      "breakpoints": true
     }
   ]
 }

@@ -22,6 +22,9 @@ import {
   LessonProgressStatus,
   quizzes,
   quizAttempts,
+  purchases,
+  refunds,
+  RefundStatus,
 } from "~/db/schema";
 import { eq, and, or, sql, desc, gt, gte } from "drizzle-orm";
 import { formatDuration, formatPrice } from "~/lib/utils";
@@ -54,6 +57,7 @@ import {
   Award,
   Globe,
   FileText,
+  RotateCcw,
 } from "lucide-react";
 import { data, isRouteErrorResponse } from "react-router";
 import { z } from "zod";
@@ -379,6 +383,26 @@ function getCourseEnrolledStudents(courseId: number) {
     .all();
 }
 
+function getCourseRefundRequests(courseId: number) {
+  return db
+    .select({
+      id: refunds.id,
+      status: refunds.status,
+      reason: refunds.reason,
+      requestedAt: refunds.requestedAt,
+      resolvedAt: refunds.resolvedAt,
+      declineNote: refunds.declineNote,
+      learnerName: users.name,
+      learnerEmail: users.email,
+    })
+    .from(refunds)
+    .innerJoin(purchases, eq(refunds.purchaseId, purchases.id))
+    .innerJoin(users, eq(purchases.userId, users.id))
+    .where(eq(purchases.courseId, courseId))
+    .orderBy(desc(refunds.requestedAt))
+    .all();
+}
+
 function getCourseLessonIds(courseId: number): number[] {
   const courseModules = db
     .select({ id: modules.id })
@@ -639,7 +663,16 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   const quizCount = lessonQuizzes.length;
 
-  return { course, lessonCount, enrollmentCount, students, quizCount };
+  const refundRequests = getCourseRefundRequests(courseId);
+
+  return {
+    course,
+    lessonCount,
+    enrollmentCount,
+    students,
+    quizCount,
+    refundRequests,
+  };
 }
 
 export async function action({ params, request }: Route.ActionArgs) {
@@ -1489,11 +1522,48 @@ function statusBadgeColor(status: string) {
   }
 }
 
+function refundStatusBadge(status: RefundStatus) {
+  switch (status) {
+    case RefundStatus.Requested:
+      return {
+        label: "Requested",
+        className:
+          "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      };
+    case RefundStatus.Approved:
+      return {
+        label: "Approved",
+        className:
+          "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      };
+    case RefundStatus.Declined:
+      return {
+        label: "Declined",
+        className:
+          "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      };
+  }
+}
+
+function formatShortDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function InstructorCourseEditor({
   loaderData,
 }: Route.ComponentProps) {
-  const { course, lessonCount, enrollmentCount, students, quizCount } =
-    loaderData;
+  const {
+    course,
+    lessonCount,
+    enrollmentCount,
+    students,
+    quizCount,
+    refundRequests,
+  } = loaderData;
   const statusFetcher = useFetcher();
   const reorderFetcher = useFetcher();
   const lessonReorderFetcher = useFetcher();
@@ -1713,6 +1783,10 @@ export default function InstructorCourseEditor({
           <TabsTrigger value="students">
             <Users className="size-4" />
             Students
+          </TabsTrigger>
+          <TabsTrigger value="refund-requests">
+            <RotateCcw className="size-4" />
+            Refund Requests
           </TabsTrigger>
         </TabsList>
 
@@ -2202,6 +2276,108 @@ export default function InstructorCourseEditor({
                                 </div>
                               </td>
                             )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Refund Requests Tab — read-only; only Admins resolve requests */}
+        <TabsContent value="refund-requests" className="mt-6">
+          <div className="mb-4 flex items-center gap-4 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <RotateCcw className="size-4" />
+              {refundRequests.length}{" "}
+              {refundRequests.length === 1
+                ? "Refund Request"
+                : "Refund Requests"}
+            </span>
+          </div>
+
+          {refundRequests.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <RotateCcw className="mx-auto mb-3 size-8 text-muted-foreground/50" />
+                <p className="text-muted-foreground">
+                  No Refund Requests for this course.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Learner
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Reason
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Requested
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Resolved
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {refundRequests.map((request) => {
+                        const badge = refundStatusBadge(request.status);
+
+                        return (
+                          <tr
+                            key={request.id}
+                            className="border-b border-border last:border-0"
+                          >
+                            <td className="px-4 py-3">
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {request.learnerName}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {request.learnerEmail}
+                                </p>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}
+                              >
+                                {badge.label}
+                              </span>
+                            </td>
+                            <td className="max-w-md px-4 py-3 text-sm whitespace-pre-wrap">
+                              {request.reason}
+                              {request.status === RefundStatus.Declined &&
+                                request.declineNote && (
+                                  <div className="mt-2 rounded-md bg-muted p-2">
+                                    <p className="text-xs font-medium text-muted-foreground">
+                                      Admin's note
+                                    </p>
+                                    <p>{request.declineNote}</p>
+                                  </div>
+                                )}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-muted-foreground">
+                              {formatShortDate(request.requestedAt)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-muted-foreground">
+                              {request.resolvedAt
+                                ? formatShortDate(request.resolvedAt)
+                                : "—"}
+                            </td>
                           </tr>
                         );
                       })}
