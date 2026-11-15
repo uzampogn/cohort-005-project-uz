@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { data, isRouteErrorResponse, Link } from "react-router";
 import { AlertTriangle, ReceiptText } from "lucide-react";
 import type { Route } from "./+types/admin.refunds";
 import { db } from "~/db";
 import {
   RefundStatus,
+  coupons,
   courses,
   enrollments,
   purchases,
@@ -170,17 +171,34 @@ export async function action({ request }: Route.ActionArgs) {
       });
     }
 
-    // An approved Refund ends access. The Purchase, progress and watch events
-    // stay as history.
+    // An approved Refund ends the access this Purchase gave. The Purchase,
+    // progress and watch events stay as history.
     if (update.status === RefundStatus.Approved) {
-      tx.delete(enrollments)
+      // The Learner may also hold the Course through a claimed Team Seat. That
+      // seat belongs to the team, not to this Purchase, and both share one
+      // Enrollment row, so in that case the Enrollment stays.
+      const claimedTeamSeat = tx
+        .select({ id: coupons.id })
+        .from(coupons)
         .where(
           and(
-            eq(enrollments.userId, refundRequest.learnerId),
-            eq(enrollments.courseId, refundRequest.courseId)
+            eq(coupons.courseId, refundRequest.courseId),
+            eq(coupons.redeemedByUserId, refundRequest.learnerId),
+            isNotNull(coupons.redeemedAt)
           )
         )
-        .run();
+        .get();
+
+      if (!claimedTeamSeat) {
+        tx.delete(enrollments)
+          .where(
+            and(
+              eq(enrollments.userId, refundRequest.learnerId),
+              eq(enrollments.courseId, refundRequest.courseId)
+            )
+          )
+          .run();
+      }
     }
   });
 
