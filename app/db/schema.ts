@@ -252,7 +252,9 @@ export const refunds = sqliteTable(
     // Set only on a decline: the Admin's explanation, which the Learner reads.
     declineNote: text("decline_note"),
   },
-  (table) => [index("refunds_purchase_idx").on(table.purchaseId)]
+  // One Refund Request per Purchase, ever — enforced here so two submissions
+  // arriving at once cannot both land.
+  (table) => [uniqueIndex("refunds_purchase_unique").on(table.purchaseId)]
 );
 
 export const teams = sqliteTable("teams", {

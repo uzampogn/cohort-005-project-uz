@@ -7,7 +7,11 @@ import { courses, refunds, users, RefundStatus } from "~/db/schema";
 import { eq } from "drizzle-orm";
 import { parseFormData, parseParams } from "~/lib/validation";
 import { getRefundEligibility } from "~/lib/refunds.server";
-import { buildRefundRequestEmail } from "~/lib/refunds";
+import {
+  buildRefundRequestEmail,
+  REFUND_ALREADY_RAISED_REASON,
+} from "~/lib/refunds";
+import Database from "better-sqlite3";
 
 const refundParamsSchema = z.object({
   slug: z.string().min(1),
@@ -23,6 +27,16 @@ const refundActionSchema = z.object({
 
 function getCourseBySlug(slug: string) {
   return db.select().from(courses).where(eq(courses.slug, slug)).get();
+}
+
+// better-sqlite3 throws SqliteError directly; drizzle may wrap it as `cause`.
+function isUniqueConstraintViolation(error: unknown): boolean {
+  const candidates = [error, error instanceof Error ? error.cause : undefined];
+  return candidates.some(
+    (candidate) =>
+      candidate instanceof Database.SqliteError &&
+      candidate.code === "SQLITE_CONSTRAINT_UNIQUE"
+  );
 }
 
 export async function action({ params, request }: Route.ActionArgs) {
@@ -68,15 +82,22 @@ export async function action({ params, request }: Route.ActionArgs) {
     return data({ errors: parsed.errors }, { status: 400 });
   }
 
-  db
-    .insert(refunds)
-    .values({
-      purchaseId: purchase.id,
-      status: RefundStatus.Requested,
-      reason: parsed.data.reason,
-    })
-    .returning()
-    .get();
+  // The eligibility check above can race a second submission; the unique
+  // index on refunds.purchase_id is what actually holds the line.
+  try {
+    db.insert(refunds)
+      .values({
+        purchaseId: purchase.id,
+        status: RefundStatus.Requested,
+        reason: parsed.data.reason,
+      })
+      .run();
+  } catch (error) {
+    if (isUniqueConstraintViolation(error)) {
+      throw data(REFUND_ALREADY_RAISED_REASON, { status: 403 });
+    }
+    throw error;
+  }
 
   const email = buildRefundRequestEmail({
     learnerName: learner.name,

@@ -39,6 +39,9 @@ function lastDayOfWindow(purchasedAt: Date): string {
   return calendarDay(deadline);
 }
 
+export const REFUND_ALREADY_RAISED_REASON =
+  "A Refund Request has already been raised on this Purchase.";
+
 export function checkRefundEligibility(
   facts: RefundEligibilityFacts
 ): RefundEligibility {
@@ -56,7 +59,7 @@ export function checkRefundEligibility(
   if (facts.hasAnyRefundRequestOnPurchase) {
     return {
       eligible: false,
-      reason: "A Refund Request has already been raised on this Purchase.",
+      reason: REFUND_ALREADY_RAISED_REASON,
     };
   }
 
