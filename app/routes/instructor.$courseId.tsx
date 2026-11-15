@@ -391,6 +391,7 @@ function getCourseRefundRequests(courseId: number) {
       reason: refunds.reason,
       requestedAt: refunds.requestedAt,
       resolvedAt: refunds.resolvedAt,
+      declineNote: refunds.declineNote,
       learnerName: users.name,
       learnerEmail: users.email,
     })
@@ -2359,6 +2360,15 @@ export default function InstructorCourseEditor({
                             </td>
                             <td className="max-w-md px-4 py-3 text-sm whitespace-pre-wrap">
                               {request.reason}
+                              {request.status === RefundStatus.Declined &&
+                                request.declineNote && (
+                                  <div className="mt-2 rounded-md bg-muted p-2">
+                                    <p className="text-xs font-medium text-muted-foreground">
+                                      Admin's note
+                                    </p>
+                                    <p>{request.declineNote}</p>
+                                  </div>
+                                )}
                             </td>
                             <td className="px-4 py-3 text-sm text-muted-foreground">
                               {formatShortDate(request.requestedAt)}
