@@ -22,7 +22,6 @@ import { db } from "~/db";
 import {
   CourseStatus,
   LessonProgressStatus,
-  RefundStatus,
   UserRole,
   comments,
   courseRatings,
@@ -35,10 +34,10 @@ import {
   purchases,
   quizAttempts,
   quizzes,
-  refunds,
   users,
 } from "~/db/schema";
 import { splitRevenue, type AnalyticsRange } from "~/lib/analytics";
+import { notRefunded } from "~/lib/analytics.server";
 import { getDiscountForCountry } from "~/lib/ppp";
 import {
   ANALYTICS_RANGES,
@@ -217,25 +216,6 @@ function scopeOn(
   }
 
   return conditions.length > 0 ? and(...conditions) : undefined;
-}
-
-/**
- * The Purchase has no approved Refund — the SQL form of `countsTowardRevenue`.
- * Open and declined Refund Requests leave it counted. Every revenue and sales
- * query applies this, so a refunded Purchase leaves every figure at once.
- */
-function notRefunded() {
-  return notExists(
-    db
-      .select({ one: sql`1` })
-      .from(refunds)
-      .where(
-        and(
-          eq(refunds.purchaseId, purchases.id),
-          eq(refunds.status, RefundStatus.Approved)
-        )
-      )
-  );
 }
 
 function purchaseScope(instructorId: number | null, range: AnalyticsRange) {
