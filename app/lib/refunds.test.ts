@@ -82,7 +82,8 @@ describe("checkRefundEligibility", () => {
         checkRefundEligibility(facts({ lessonsCompleted: 5, totalLessons: 10 }))
       ).toEqual({
         eligible: false,
-        reason: "You have completed half or more of the lessons in this Course.",
+        reason:
+          "You have completed half or more of the lessons in this Course.",
       });
     });
 
@@ -109,7 +110,8 @@ describe("checkRefundEligibility", () => {
         )
       ).toEqual({
         eligible: false,
-        reason: "A claimed Team Seat belongs to the team and cannot be refunded.",
+        reason:
+          "A claimed Team Seat belongs to the team and cannot be refunded.",
       });
     });
   });
@@ -189,6 +191,7 @@ describe("buildRefundOutcomeEmail", () => {
       ...learner,
       outcome: "approved",
       amountRefunded: 3950,
+      keepsAccessThroughTeamSeat: false,
     });
 
     it("tells the Learner it was approved and how much comes back", () => {
@@ -205,6 +208,27 @@ describe("buildRefundOutcomeEmail", () => {
           "— The Cadence team",
         ].join("\n"),
       });
+    });
+
+    it("tells a Learner who also holds a claimed Team Seat that they keep access", () => {
+      const withTeamSeat = buildRefundOutcomeEmail({
+        ...learner,
+        outcome: "approved",
+        amountRefunded: 3950,
+        keepsAccessThroughTeamSeat: true,
+      });
+
+      expect(withTeamSeat.body).toBe(
+        [
+          "Hi Liam,",
+          "",
+          'Your Refund Request for "Introduction to TypeScript" has been approved.',
+          "Your Refund of $39.50 is on its way to you.",
+          "You keep access to the Course through your team's seat.",
+          "",
+          "— The Cadence team",
+        ].join("\n")
+      );
     });
   });
 
@@ -241,6 +265,7 @@ describe("buildRefundOutcomeEmail", () => {
         ...learner,
         outcome: "approved",
         amountRefunded: 3950,
+        keepsAccessThroughTeamSeat: false,
       }),
       buildRefundOutcomeEmail({
         ...learner,

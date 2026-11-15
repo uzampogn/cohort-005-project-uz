@@ -150,7 +150,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const { update } = resolution;
 
-  db.transaction((tx) => {
+  const keepsAccessThroughTeamSeat = db.transaction((tx) => {
     // The status guard means a request resolved by someone else in the
     // meantime is left alone rather than overwritten.
     const updated = tx
@@ -189,17 +189,19 @@ export async function action({ request }: Route.ActionArgs) {
         )
         .get();
 
-      if (!claimedTeamSeat) {
-        tx.delete(enrollments)
-          .where(
-            and(
-              eq(enrollments.userId, refundRequest.learnerId),
-              eq(enrollments.courseId, refundRequest.courseId)
-            )
+      if (claimedTeamSeat) return true;
+
+      tx.delete(enrollments)
+        .where(
+          and(
+            eq(enrollments.userId, refundRequest.learnerId),
+            eq(enrollments.courseId, refundRequest.courseId)
           )
-          .run();
-      }
+        )
+        .run();
     }
+
+    return false;
   });
 
   const learner = {
@@ -213,20 +215,23 @@ export async function action({ request }: Route.ActionArgs) {
           ...learner,
           outcome: "approved",
           amountRefunded: update.amountRefunded ?? refundRequest.amountPaid,
+          keepsAccessThroughTeamSeat,
         }
       : { ...learner, outcome: "declined", declineNote: parsed.data.note }
   );
 
-  console.log(
-    `[email] to=${email.to} subject=${email.subject}\n${email.body}`
-  );
+  console.log(`[email] to=${email.to} subject=${email.subject}\n${email.body}`);
 
-  return { resolved: update.status };
+  return { resolved: update.status, keepsAccessThroughTeamSeat };
 }
 
 type OpenRefundRequest = Route.ComponentProps["loaderData"]["requests"][number];
 
-function RefundRequestRow({ refundRequest }: { refundRequest: OpenRefundRequest }) {
+function RefundRequestRow({
+  refundRequest,
+}: {
+  refundRequest: OpenRefundRequest;
+}) {
   const fetcher = useFetcher<typeof action>();
   const [declining, setDeclining] = useState(false);
   const [note, setNote] = useState("");
@@ -235,9 +240,11 @@ function RefundRequestRow({ refundRequest }: { refundRequest: OpenRefundRequest 
   useEffect(() => {
     if (fetcher.state !== "idle" || !fetcher.data) return;
     toast.success(
-      fetcher.data.resolved === RefundStatus.Approved
-        ? "Refund approved. The Learner no longer has access."
-        : "Refund Request declined."
+      fetcher.data.resolved !== RefundStatus.Approved
+        ? "Refund Request declined."
+        : fetcher.data.keepsAccessThroughTeamSeat
+          ? "Refund approved. The Learner keeps access through a claimed Team Seat."
+          : "Refund approved. The Learner no longer has access."
     );
   }, [fetcher.state, fetcher.data]);
 

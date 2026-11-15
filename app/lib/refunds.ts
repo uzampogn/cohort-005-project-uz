@@ -127,7 +127,12 @@ export function buildRefundRequestEmail(input: {
 }
 
 export type RefundOutcome =
-  | { outcome: "approved"; amountRefunded: number }
+  | {
+      outcome: "approved";
+      amountRefunded: number;
+      /** A claimed Team Seat still gives them the Course after the Refund. */
+      keepsAccessThroughTeamSeat: boolean;
+    }
   | { outcome: "declined"; declineNote: string };
 
 /**
@@ -168,7 +173,9 @@ export function buildRefundOutcomeEmail(
       ...greeting,
       `Your Refund Request for "${input.courseTitle}" has been approved.`,
       `Your Refund of ${formatPrice(input.amountRefunded)} is on its way to you.`,
-      "Your access to the Course has ended; your progress is kept.",
+      input.keepsAccessThroughTeamSeat
+        ? "You keep access to the Course through your team's seat."
+        : "Your access to the Course has ended; your progress is kept.",
       ...signOff,
     ].join("\n"),
   };
