@@ -122,3 +122,51 @@ export function buildRefundRequestEmail(input: {
     ].join("\n"),
   };
 }
+
+export type RefundOutcome =
+  | { outcome: "approved"; amountRefunded: number }
+  | { outcome: "declined"; declineNote: string };
+
+/**
+ * The email a Learner gets once an Admin approves or declines their Refund
+ * Request. Like the request email, callers send it to the server log.
+ */
+export function buildRefundOutcomeEmail(
+  input: {
+    learnerName: string;
+    learnerEmail: string;
+    courseTitle: string;
+  } & RefundOutcome
+) {
+  const greeting = [`Hi ${input.learnerName},`, ""];
+  const signOff = ["", "— The Cadence team"];
+
+  if (input.outcome === "declined") {
+    return {
+      to: input.learnerEmail,
+      subject: `Refund Request declined — ${input.courseTitle}`,
+      body: [
+        ...greeting,
+        `Your Refund Request for "${input.courseTitle}" has been declined.`,
+        "Our team left this note for you:",
+        "",
+        input.declineNote,
+        "",
+        "You keep your access to the Course. This decision is final.",
+        ...signOff,
+      ].join("\n"),
+    };
+  }
+
+  return {
+    to: input.learnerEmail,
+    subject: `Refund approved — ${input.courseTitle}`,
+    body: [
+      ...greeting,
+      `Your Refund Request for "${input.courseTitle}" has been approved.`,
+      `Your Refund of ${formatPrice(input.amountRefunded)} is on its way to you.`,
+      "Your access to the Course has ended; your progress is kept.",
+      ...signOff,
+    ].join("\n"),
+  };
+}

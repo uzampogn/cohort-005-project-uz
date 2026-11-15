@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildRefundOutcomeEmail,
   buildRefundRequestEmail,
   checkRefundEligibility,
   type RefundEligibilityFacts,
@@ -173,5 +174,84 @@ describe("buildRefundRequestEmail", () => {
     expect(`${email.subject}\n${email.body}`).not.toMatch(
       /reversal|chargeback/i
     );
+  });
+});
+
+describe("buildRefundOutcomeEmail", () => {
+  const learner = {
+    learnerName: "Liam",
+    learnerEmail: "liam@example.com",
+    courseTitle: "Introduction to TypeScript",
+  };
+
+  describe("an approved Refund", () => {
+    const email = buildRefundOutcomeEmail({
+      ...learner,
+      outcome: "approved",
+      amountRefunded: 3950,
+    });
+
+    it("tells the Learner it was approved and how much comes back", () => {
+      expect(email).toEqual({
+        to: "liam@example.com",
+        subject: "Refund approved — Introduction to TypeScript",
+        body: [
+          "Hi Liam,",
+          "",
+          'Your Refund Request for "Introduction to TypeScript" has been approved.',
+          "Your Refund of $39.50 is on its way to you.",
+          "Your access to the Course has ended; your progress is kept.",
+          "",
+          "— The Cadence team",
+        ].join("\n"),
+      });
+    });
+  });
+
+  describe("a declined Refund Request", () => {
+    const email = buildRefundOutcomeEmail({
+      ...learner,
+      outcome: "declined",
+      declineNote: "You have watched most of the Course since asking.",
+    });
+
+    it("tells the Learner it was declined and passes on the Admin's note", () => {
+      expect(email).toEqual({
+        to: "liam@example.com",
+        subject: "Refund Request declined — Introduction to TypeScript",
+        body: [
+          "Hi Liam,",
+          "",
+          'Your Refund Request for "Introduction to TypeScript" has been declined.',
+          "Our team left this note for you:",
+          "",
+          "You have watched most of the Course since asking.",
+          "",
+          "You keep your access to the Course. This decision is final.",
+          "",
+          "— The Cadence team",
+        ].join("\n"),
+      });
+    });
+  });
+
+  it("never calls it a Reversal or a Chargeback, whatever the outcome", () => {
+    const emails = [
+      buildRefundOutcomeEmail({
+        ...learner,
+        outcome: "approved",
+        amountRefunded: 3950,
+      }),
+      buildRefundOutcomeEmail({
+        ...learner,
+        outcome: "declined",
+        declineNote: "Outside the policy.",
+      }),
+    ];
+    for (const email of emails) {
+      expect(`${email.subject}\n${email.body}`).not.toMatch(
+        /reversal|chargeback/i
+      );
+    }
   });
 });

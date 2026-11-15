@@ -20,6 +20,7 @@ import {
 } from "~/db/schema";
 import { requireAdmin } from "~/lib/access.server";
 import { resolveRefundRequest } from "~/lib/refund-resolution";
+import { buildRefundOutcomeEmail } from "~/lib/refunds";
 import { formatPrice } from "~/lib/utils";
 import { parseFormData } from "~/lib/validation";
 import { Card, CardContent } from "~/components/ui/card";
@@ -96,10 +97,15 @@ function getRefundRequestForResolution(refundId: number) {
       status: refunds.status,
       amountPaid: purchases.amountPaid,
       learnerId: purchases.userId,
+      learnerName: users.name,
+      learnerEmail: users.email,
       courseId: purchases.courseId,
+      courseTitle: courses.title,
     })
     .from(refunds)
     .innerJoin(purchases, eq(refunds.purchaseId, purchases.id))
+    .innerJoin(users, eq(purchases.userId, users.id))
+    .innerJoin(courses, eq(purchases.courseId, courses.id))
     .where(eq(refunds.id, refundId))
     .get();
 }
@@ -204,6 +210,25 @@ export async function action({ request }: Route.ActionArgs) {
         .run();
     }
   });
+
+  const learner = {
+    learnerName: refundRequest.learnerName,
+    learnerEmail: refundRequest.learnerEmail,
+    courseTitle: refundRequest.courseTitle,
+  };
+  const email = buildRefundOutcomeEmail(
+    parsed.data.intent === "approve"
+      ? {
+          ...learner,
+          outcome: "approved",
+          amountRefunded: update.amountRefunded ?? refundRequest.amountPaid,
+        }
+      : { ...learner, outcome: "declined", declineNote: parsed.data.note }
+  );
+
+  console.log(
+    `[email] to=${email.to} subject=${email.subject}\n${email.body}`
+  );
 
   return { resolved: update.status };
 }

@@ -21,13 +21,37 @@ import {
 import { AlertTriangle } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
 import { db } from "~/db";
-import { and, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { formatPrice } from "~/lib/utils";
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Name cannot be empty."),
   bio: z.string().trim().optional(),
 });
+
+const REFUND_STATUS_BADGES: Record<
+  RefundStatus,
+  { label: string; className: string }
+> = {
+  [RefundStatus.Requested]: {
+    label: "Open",
+    className:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  },
+  [RefundStatus.Approved]: {
+    label: "Approved",
+    className:
+      "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  },
+  [RefundStatus.Declined]: {
+    label: "Declined",
+    className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  },
+};
+
+function formatDate(isoDate: string) {
+  return new Date(isoDate).toLocaleDateString();
+}
 
 export function meta() {
   return [
@@ -61,18 +85,18 @@ export async function loader({ request }: Route.LoaderArgs) {
       courseTitle: courses.title,
       courseSlug: courses.slug,
       amountPaid: purchases.amountPaid,
+      amountRefunded: refunds.amountRefunded,
+      status: refunds.status,
       reason: refunds.reason,
       requestedAt: refunds.requestedAt,
+      resolvedAt: refunds.resolvedAt,
+      declineNote: refunds.declineNote,
     })
     .from(refunds)
     .innerJoin(purchases, eq(refunds.purchaseId, purchases.id))
     .innerJoin(courses, eq(purchases.courseId, courses.id))
-    .where(
-      and(
-        eq(purchases.userId, currentUserId),
-        eq(refunds.status, RefundStatus.Requested)
-      )
-    )
+    .where(eq(purchases.userId, currentUserId))
+    .orderBy(desc(refunds.requestedAt), desc(refunds.id))
     .all();
 
   return {
@@ -123,6 +147,9 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
   const { user, refundRequests } = loaderData;
+  const openCount = refundRequests.filter(
+    (refundRequest) => refundRequest.status === RefundStatus.Requested
+  ).length;
   const fetcher = useFetcher();
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -214,32 +241,55 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           <CardHeader>
             <h2 className="text-lg font-semibold">Refund Requests</h2>
             <p className="text-sm text-muted-foreground">
-              {refundRequests.length === 1
-                ? "One Refund Request is waiting on us."
-                : `${refundRequests.length} Refund Requests are waiting on us.`}
+              {openCount === 0
+                ? "None of your Refund Requests are waiting on us."
+                : openCount === 1
+                  ? "One Refund Request is waiting on us."
+                  : `${openCount} Refund Requests are waiting on us.`}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {refundRequests.map((refundRequest) => (
-              <div key={refundRequest.id} className="rounded-md border p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <Link
-                    to={`/courses/${refundRequest.courseSlug}`}
-                    className="font-medium hover:underline"
-                  >
-                    {refundRequest.courseTitle}
-                  </Link>
-                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                    Open
-                  </span>
+            {refundRequests.map((refundRequest) => {
+              const badge = REFUND_STATUS_BADGES[refundRequest.status];
+              const approved = refundRequest.status === RefundStatus.Approved;
+              return (
+                <div key={refundRequest.id} className="rounded-md border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <Link
+                      to={`/courses/${refundRequest.courseSlug}`}
+                      className="font-medium hover:underline"
+                    >
+                      {refundRequest.courseTitle}
+                    </Link>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}
+                    >
+                      {badge.label}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {approved
+                      ? `${formatPrice(refundRequest.amountRefunded ?? refundRequest.amountPaid)} refunded`
+                      : `${formatPrice(refundRequest.amountPaid)} paid`}{" "}
+                    · requested {formatDate(refundRequest.requestedAt)}
+                    {refundRequest.resolvedAt &&
+                      ` · ${badge.label.toLowerCase()} ${formatDate(refundRequest.resolvedAt)}`}
+                  </p>
+                  <p className="mt-2 text-sm">{refundRequest.reason}</p>
+                  {refundRequest.status === RefundStatus.Declined &&
+                    refundRequest.declineNote && (
+                      <div className="mt-2 rounded-md bg-muted p-2 text-sm">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Note from our team
+                        </p>
+                        <p className="whitespace-pre-wrap">
+                          {refundRequest.declineNote}
+                        </p>
+                      </div>
+                    )}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {formatPrice(refundRequest.amountPaid)} · raised{" "}
-                  {new Date(refundRequest.requestedAt).toLocaleDateString()}
-                </p>
-                <p className="mt-2 text-sm">{refundRequest.reason}</p>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}

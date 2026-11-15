@@ -49,7 +49,10 @@ import {
   getCountryTierInfo,
 } from "~/lib/ppp";
 import { parseFormData } from "~/lib/validation";
-import { getRefundEligibility } from "~/lib/refunds.server";
+import {
+  getOpenRefundRequest,
+  getRefundEligibility,
+} from "~/lib/refunds.server";
 import { MAX_RATING, MIN_RATING } from "~/lib/ratings";
 import { StarRating, StarRatingInput } from "~/components/star-rating";
 
@@ -395,6 +398,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   let lessonProgressMap: Record<number, string> = {};
   let nextLessonId: number | null = null;
   let refundOffer: { amount: number; lastDayInWindow: string } | null = null;
+  let openRefundRequest: { requestedAt: string } | null = null;
 
   if (currentUserId) {
     enrolled = isUserEnrolled(currentUserId, course.id);
@@ -404,6 +408,12 @@ export async function loader({ params, request }: Route.LoaderArgs) {
       if (refundCheck?.eligibility.eligible) {
         const { amount, lastDayInWindow } = refundCheck.eligibility;
         refundOffer = { amount, lastDayInWindow };
+      }
+      if (refundCheck) {
+        const openRequest = getOpenRefundRequest(refundCheck.purchase.id);
+        if (openRequest) {
+          openRefundRequest = { requestedAt: openRequest.requestedAt };
+        }
       }
 
       progress = calculateProgress(currentUserId, course.id, false);
@@ -449,6 +459,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     ratingSummary,
     userRating,
     refundOffer,
+    openRefundRequest,
   };
 }
 
@@ -550,6 +561,7 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
     ratingSummary,
     userRating,
     refundOffer,
+    openRefundRequest,
   } = loaderData;
   const isInstructor = currentUserId === course.instructorId;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -785,11 +797,17 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
                     </Button>
                   </Link>
                   <RateCourse userRating={userRating} />
-                  {refundOffer && (
-                    <RequestRefund
-                      slug={course.slug}
-                      amount={refundOffer.amount}
+                  {openRefundRequest ? (
+                    <RefundRequested
+                      requestedAt={openRefundRequest.requestedAt}
                     />
+                  ) : (
+                    refundOffer && (
+                      <RequestRefund
+                        slug={course.slug}
+                        amount={refundOffer.amount}
+                      />
+                    )
                   )}
                 </>
               ) : (
@@ -858,6 +876,23 @@ function RateCourse({ userRating }: { userRating: number | null }) {
           Click a star to change your rating.
         </p>
       )}
+    </div>
+  );
+}
+
+function RefundRequested({ requestedAt }: { requestedAt: string }) {
+  const requestedOn = new Date(requestedAt).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+
+  return (
+    <div className="border-t pt-4 text-center text-sm text-muted-foreground">
+      <p>Refund requested on {requestedOn}</p>
+      <Link to="/settings" className="text-xs hover:underline">
+        See your Refund Requests
+      </Link>
     </div>
   );
 }

@@ -125,6 +125,22 @@ function wasRefundedOnEarlierPurchase(
   );
 }
 
+/** The Refund Request on a Purchase that an Admin has not resolved yet. */
+export function getOpenRefundRequest(purchaseId: number) {
+  return (
+    db
+      .select({ id: refunds.id, requestedAt: refunds.requestedAt })
+      .from(refunds)
+      .where(
+        and(
+          eq(refunds.purchaseId, purchaseId),
+          eq(refunds.status, RefundStatus.Requested)
+        )
+      )
+      .get() ?? null
+  );
+}
+
 /**
  * Refund Eligibility for the Learner's latest Purchase of a Course, judged
  * now. Returns null when the Learner has no Purchase of the Course.
