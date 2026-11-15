@@ -5,6 +5,8 @@
 // Imported by both the service and the route, so nothing here may touch the
 // database or the request.
 
+import { RefundStatus } from "~/db/schema";
+
 /**
  * The platform's cut of gross revenue. One constant, named once — the page
  * shows gross, fee and net side by side, and they must agree.
@@ -100,4 +102,19 @@ export function formatBucket(bucket: string): string {
 export function splitRevenue(grossCents: number) {
   const feeCents = Math.round(grossCents * PLATFORM_FEE_RATE);
   return { grossCents, feeCents, netCents: grossCents - feeCents };
+}
+
+/**
+ * Whether a Purchase counts toward revenue and sales, given the statuses of
+ * the Refund Requests raised on it.
+ *
+ * Only an approved Refund takes a Purchase out: the money went back to the
+ * Learner. An open request still counts (the Learner keeps access until an
+ * Admin decides), and so does a declined one.
+ *
+ * The analytics route applies the same rule in SQL (`notRefunded` there), so
+ * the two must change together.
+ */
+export function countsTowardRevenue(refundStatuses: RefundStatus[]): boolean {
+  return !refundStatuses.includes(RefundStatus.Approved);
 }

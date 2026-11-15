@@ -9,7 +9,9 @@ import {
   rangeStart,
   parseAnalyticsRange,
   splitRevenue,
+  countsTowardRevenue,
 } from "./analytics";
+import { RefundStatus } from "~/db/schema";
 
 describe("analytics config", () => {
   describe("the platform fee", () => {
@@ -75,6 +77,26 @@ describe("analytics config", () => {
         feeCents: 0,
         netCents: 0,
       });
+    });
+  });
+
+  describe("countsTowardRevenue", () => {
+    it("counts a Purchase with no Refund Request", () => {
+      expect(countsTowardRevenue([])).toBe(true);
+    });
+
+    it("drops a Purchase whose Refund Request was approved", () => {
+      expect(countsTowardRevenue([RefundStatus.Approved])).toBe(false);
+    });
+
+    it("still counts a Purchase while its Refund Request is open", () => {
+      // The Learner keeps access until an Admin decides, so the money is
+      // still the Instructor's.
+      expect(countsTowardRevenue([RefundStatus.Requested])).toBe(true);
+    });
+
+    it("still counts a Purchase whose Refund Request was declined", () => {
+      expect(countsTowardRevenue([RefundStatus.Declined])).toBe(true);
     });
   });
 

@@ -22,6 +22,7 @@ import { db } from "~/db";
 import {
   CourseStatus,
   LessonProgressStatus,
+  RefundStatus,
   UserRole,
   comments,
   courseRatings,
@@ -34,6 +35,7 @@ import {
   purchases,
   quizAttempts,
   quizzes,
+  refunds,
   users,
 } from "~/db/schema";
 import { splitRevenue, type AnalyticsRange } from "~/lib/analytics";
@@ -217,8 +219,30 @@ function scopeOn(
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
+/**
+ * The Purchase has no approved Refund — the SQL form of `countsTowardRevenue`.
+ * Open and declined Refund Requests leave it counted. Every revenue and sales
+ * query applies this, so a refunded Purchase leaves every figure at once.
+ */
+function notRefunded() {
+  return notExists(
+    db
+      .select({ one: sql`1` })
+      .from(refunds)
+      .where(
+        and(
+          eq(refunds.purchaseId, purchases.id),
+          eq(refunds.status, RefundStatus.Approved)
+        )
+      )
+  );
+}
+
 function purchaseScope(instructorId: number | null, range: AnalyticsRange) {
-  return scopeOn(purchases.createdAt, instructorId, range);
+  return and(
+    scopeOn(purchases.createdAt, instructorId, range),
+    notRefunded()
+  );
 }
 
 function sinceRange(dateColumn: SQLiteColumn, range: AnalyticsRange) {
@@ -263,6 +287,7 @@ function getStudentRevenue(
       and(
         inArray(purchases.userId, studentIds),
         notExists(mintedSeats),
+        notRefunded(),
         ownedBy(instructorId)
       )
     )
@@ -287,7 +312,11 @@ function getStudentRevenue(
     .innerJoin(courses, eq(purchases.courseId, courses.id))
     .innerJoin(seatCounts, eq(seatCounts.purchaseId, coupons.purchaseId))
     .where(
-      and(inArray(coupons.redeemedByUserId, studentIds), ownedBy(instructorId))
+      and(
+        inArray(coupons.redeemedByUserId, studentIds),
+        notRefunded(),
+        ownedBy(instructorId)
+      )
     )
     .groupBy(coupons.redeemedByUserId)
     .all();
@@ -743,7 +772,8 @@ function getCourseRevenueByCountry(
     .where(
       and(
         eq(purchases.courseId, courseId),
-        sinceRange(purchases.createdAt, range)
+        sinceRange(purchases.createdAt, range),
+        notRefunded()
       )
     )
     .groupBy(purchases.country)
