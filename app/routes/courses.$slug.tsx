@@ -786,7 +786,7 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
                   </Link>
                   <RateCourse userRating={userRating} />
                   {refundOffer && (
-                    <CancelPurchase
+                    <RequestRefund
                       slug={course.slug}
                       amount={refundOffer.amount}
                     />
@@ -862,7 +862,7 @@ function RateCourse({ userRating }: { userRating: number | null }) {
   );
 }
 
-function CancelPurchase({ slug, amount }: { slug: string; amount: number }) {
+function RequestRefund({ slug, amount }: { slug: string; amount: number }) {
   const fetcher = useFetcher<{ errors?: Record<string, string> }>();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const isSubmitting = fetcher.state !== "idle";
@@ -893,8 +893,8 @@ function CancelPurchase({ slug, amount }: { slug: string; amount: number }) {
     <div className="border-t pt-4">
       <p className="mb-2 text-sm font-medium">Cancel my purchase</p>
       <p className="mb-3 text-xs text-muted-foreground">
-        We will send {formatPrice(amount)} back to the card you paid with, once
-        someone has read your note.
+        This raises a Refund Request for {formatPrice(amount)}, the amount you
+        paid. Our team reviews it and emails you when it is done.
       </p>
       <fetcher.Form
         method="post"

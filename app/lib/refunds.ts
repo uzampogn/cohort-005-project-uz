@@ -1,3 +1,5 @@
+import { formatPrice } from "~/lib/utils";
+
 export const REFUND_WINDOW_DAYS = 14;
 export const REFUND_MAX_HOURS_WATCHED = 2;
 export const REFUND_MAX_SHARE_COMPLETED = 0.5;
@@ -92,4 +94,31 @@ export function checkRefundEligibility(
   }
 
   return { eligible: true, amount: facts.amountPaid, lastDayInWindow };
+}
+
+/**
+ * The confirmation a Learner gets in their inbox when they raise a Refund
+ * Request. There is no mail transport wired up yet, so callers send the built
+ * message to the server log.
+ */
+export function buildRefundRequestEmail(input: {
+  learnerName: string;
+  learnerEmail: string;
+  courseTitle: string;
+  amount: number;
+}) {
+  return {
+    to: input.learnerEmail,
+    subject: `Refund Request received — ${input.courseTitle}`,
+    body: [
+      `Hi ${input.learnerName},`,
+      "",
+      `We have your Refund Request for "${input.courseTitle}".`,
+      `If it is approved, your Refund will be ${formatPrice(input.amount)}, the amount you paid.`,
+      "",
+      "Our team reviews every Refund Request by hand. You do not need to do anything else — we will email you again when it is done.",
+      "",
+      "— The Cadence team",
+    ].join("\n"),
+  };
 }

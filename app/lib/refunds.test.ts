@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { checkRefundEligibility, type RefundEligibilityFacts } from "./refunds";
+import {
+  buildRefundRequestEmail,
+  checkRefundEligibility,
+  type RefundEligibilityFacts,
+} from "./refunds";
 
 // Dates are built from local parts, because the fourteen-day window is
 // counted in the server's calendar days.
@@ -129,5 +133,45 @@ describe("checkRefundEligibility", () => {
         reason: "You have already been refunded for this Course once.",
       });
     });
+  });
+});
+
+describe("buildRefundRequestEmail", () => {
+  const email = buildRefundRequestEmail({
+    learnerName: "Liam",
+    learnerEmail: "liam@example.com",
+    courseTitle: "Introduction to TypeScript",
+    amount: 3950,
+  });
+
+  it("goes to the Learner", () => {
+    expect(email.to).toBe("liam@example.com");
+  });
+
+  it("names a Refund Request in the subject", () => {
+    expect(email.subject).toBe(
+      "Refund Request received — Introduction to TypeScript"
+    );
+  });
+
+  it("confirms the Refund Request for what the Learner paid", () => {
+    expect(email.body).toBe(
+      [
+        "Hi Liam,",
+        "",
+        'We have your Refund Request for "Introduction to TypeScript".',
+        "If it is approved, your Refund will be $39.50, the amount you paid.",
+        "",
+        "Our team reviews every Refund Request by hand. You do not need to do anything else — we will email you again when it is done.",
+        "",
+        "— The Cadence team",
+      ].join("\n")
+    );
+  });
+
+  it("never calls it a Reversal or a Chargeback", () => {
+    expect(`${email.subject}\n${email.body}`).not.toMatch(
+      /reversal|chargeback/i
+    );
   });
 });
