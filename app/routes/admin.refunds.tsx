@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { data, isRouteErrorResponse, Link } from "react-router";
 import { AlertTriangle, ReceiptText } from "lucide-react";
 import type { Route } from "./+types/admin.refunds";
@@ -11,25 +11,19 @@ import {
   RefundStatus,
   courses,
   enrollments,
-  lessons,
-  modules,
   purchases,
   refunds,
   users,
-  videoWatchEvents,
 } from "~/db/schema";
 import { requireAdmin } from "~/lib/access.server";
 import { resolveRefundRequest } from "~/lib/refund-resolution";
 import { buildRefundOutcomeEmail } from "~/lib/refunds";
+import { getSecondsWatched } from "~/lib/refunds.server";
 import { formatPrice } from "~/lib/utils";
 import { parseFormData } from "~/lib/validation";
 import { Card, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
-
-// The player posts a `progress` heartbeat every 10 seconds of playback — see
-// app/components/youtube-player.tsx.
-const HEARTBEAT_INTERVAL_SECONDS = 10;
 
 const refundActionSchema = z.discriminatedUnion("intent", [
   z.object({
@@ -64,30 +58,6 @@ function getOpenRefundRequests() {
     .where(eq(refunds.status, RefundStatus.Requested))
     .orderBy(asc(refunds.requestedAt))
     .all();
-}
-
-/** Seconds of this Course the Learner has played since raising the request. */
-function getSecondsWatchedSince(
-  userId: number,
-  courseId: number,
-  since: string
-) {
-  const result = db
-    .select({ heartbeats: sql<number>`count(*)` })
-    .from(videoWatchEvents)
-    .innerJoin(lessons, eq(videoWatchEvents.lessonId, lessons.id))
-    .innerJoin(modules, eq(lessons.moduleId, modules.id))
-    .where(
-      and(
-        eq(videoWatchEvents.userId, userId),
-        eq(modules.courseId, courseId),
-        eq(videoWatchEvents.eventType, "progress"),
-        gt(videoWatchEvents.createdAt, since)
-      )
-    )
-    .get();
-
-  return (result?.heartbeats ?? 0) * HEARTBEAT_INTERVAL_SECONDS;
 }
 
 function getRefundRequestForResolution(refundId: number) {
@@ -130,10 +100,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const requests = getOpenRefundRequests().map((refundRequest) => ({
     ...refundRequest,
-    secondsWatchedSince: getSecondsWatchedSince(
-      refundRequest.learnerId,
-      refundRequest.courseId,
-      refundRequest.requestedAt
+    // Watched now minus watched as of asking, both measured the way Refund
+    // Eligibility measures it. Positions are fractional, so round for display.
+    secondsWatchedSince: Math.round(
+      getSecondsWatched(refundRequest.learnerId, refundRequest.courseId) -
+        getSecondsWatched(refundRequest.learnerId, refundRequest.courseId, {
+          asOf: refundRequest.requestedAt,
+        })
     ),
   }));
 

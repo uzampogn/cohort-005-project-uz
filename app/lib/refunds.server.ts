@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lte, ne, sql } from "drizzle-orm";
 import { db } from "~/db";
 import {
   coupons,
@@ -50,19 +50,31 @@ function countCompletedLessons(userId: number, lessonIds: number[]): number {
   return result?.count ?? 0;
 }
 
-// The furthest point reached in each lesson, added up across the Course.
-function getSecondsWatched(userId: number, lessonIds: number[]): number {
-  if (lessonIds.length === 0) return 0;
-
+/**
+ * Seconds of a Course the Learner has watched: the furthest point reached in
+ * each lesson, added up across the Course. With `asOf`, only watch events
+ * recorded at or before that moment count, so the same measure can be taken
+ * as it stood then.
+ */
+export function getSecondsWatched(
+  userId: number,
+  courseId: number,
+  options: { asOf?: string } = {}
+): number {
   return db
     .select({
       furthest: sql<number>`max(${videoWatchEvents.positionSeconds})`,
     })
     .from(videoWatchEvents)
+    .innerJoin(lessons, eq(videoWatchEvents.lessonId, lessons.id))
+    .innerJoin(modules, eq(lessons.moduleId, modules.id))
     .where(
       and(
         eq(videoWatchEvents.userId, userId),
-        inArray(videoWatchEvents.lessonId, lessonIds)
+        eq(modules.courseId, courseId),
+        options.asOf === undefined
+          ? undefined
+          : lte(videoWatchEvents.createdAt, options.asOf)
       )
     )
     .groupBy(videoWatchEvents.lessonId)
@@ -161,7 +173,7 @@ export function getRefundEligibility(
     today: new Date(),
     purchasedAt: new Date(purchase.createdAt),
     amountPaid: purchase.amountPaid,
-    secondsWatched: getSecondsWatched(userId, lessonIds),
+    secondsWatched: getSecondsWatched(userId, courseId),
     lessonsCompleted: countCompletedLessons(userId, lessonIds),
     totalLessons: lessonIds.length,
     isTeamLicence: isTeamLicence(purchase.id),
