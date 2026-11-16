@@ -79,11 +79,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw data("User not found.", { status: 404 });
   }
 
-<<<<<<< HEAD
   const refundRequests = db
-=======
-  const openRefundRequests = db
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
     .select({
       id: refunds.id,
       courseTitle: courses.title,
@@ -99,17 +95,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     .from(refunds)
     .innerJoin(purchases, eq(refunds.purchaseId, purchases.id))
     .innerJoin(courses, eq(purchases.courseId, courses.id))
-<<<<<<< HEAD
     .where(eq(purchases.userId, currentUserId))
     .orderBy(desc(refunds.requestedAt), desc(refunds.id))
-=======
-    .where(
-      and(
-        eq(purchases.userId, currentUserId),
-        eq(refunds.status, RefundStatus.Open)
-      )
-    )
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
     .all();
 
   return {
@@ -120,11 +107,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       bio: currentUser.bio,
       role: currentUser.role,
     },
-<<<<<<< HEAD
     refundRequests,
-=======
-    openRefundRequests,
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
   };
 }
 
@@ -163,14 +146,10 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-<<<<<<< HEAD
   const { user, refundRequests } = loaderData;
   const openCount = refundRequests.filter(
     (refundRequest) => refundRequest.status === RefundStatus.Requested
   ).length;
-=======
-  const { user, openRefundRequests } = loaderData;
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
   const fetcher = useFetcher();
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -257,16 +236,11 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         </CardContent>
       </Card>
 
-<<<<<<< HEAD
       {refundRequests.length > 0 && (
-=======
-      {openRefundRequests.length > 0 && (
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
         <Card className="mt-8 max-w-md">
           <CardHeader>
             <h2 className="text-lg font-semibold">Refund Requests</h2>
             <p className="text-sm text-muted-foreground">
-<<<<<<< HEAD
               {openCount === 0
                 ? "None of your Refund Requests are waiting on us."
                 : openCount === 1
@@ -316,34 +290,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
                 </div>
               );
             })}
-=======
-              {openRefundRequests.length === 1
-                ? "One refund request is waiting on us."
-                : `${openRefundRequests.length} refund requests are waiting on us.`}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {openRefundRequests.map((refundRequest) => (
-              <div key={refundRequest.id} className="rounded-md border p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <Link
-                    to={`/courses/${refundRequest.courseSlug}`}
-                    className="font-medium hover:underline"
-                  >
-                    {refundRequest.courseTitle}
-                  </Link>
-                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                    Open
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {formatPrice(refundRequest.amountPaid)} · raised{" "}
-                  {new Date(refundRequest.requestedAt).toLocaleDateString()}
-                </p>
-                <p className="mt-2 text-sm">{refundRequest.reason}</p>
-              </div>
-            ))}
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
           </CardContent>
         </Card>
       )}
