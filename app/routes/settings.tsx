@@ -80,11 +80,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
 <<<<<<< HEAD
-<<<<<<< HEAD
   const refundRequests = db
-=======
-  const openRefundRequests = db
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
   const openRefundRequests = db
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
@@ -125,11 +121,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       role: currentUser.role,
     },
 <<<<<<< HEAD
-<<<<<<< HEAD
     refundRequests,
-=======
-    openRefundRequests,
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
     openRefundRequests,
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
@@ -172,14 +164,10 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
 <<<<<<< HEAD
-<<<<<<< HEAD
   const { user, refundRequests } = loaderData;
   const openCount = refundRequests.filter(
     (refundRequest) => refundRequest.status === RefundStatus.Requested
   ).length;
-=======
-  const { user, openRefundRequests } = loaderData;
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
   const { user, openRefundRequests } = loaderData;
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
@@ -270,11 +258,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
       </Card>
 
 <<<<<<< HEAD
-<<<<<<< HEAD
       {refundRequests.length > 0 && (
-=======
-      {openRefundRequests.length > 0 && (
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
       {openRefundRequests.length > 0 && (
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
@@ -282,7 +266,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           <CardHeader>
             <h2 className="text-lg font-semibold">Refund Requests</h2>
             <p className="text-sm text-muted-foreground">
-<<<<<<< HEAD
 <<<<<<< HEAD
               {openCount === 0
                 ? "None of your Refund Requests are waiting on us."
@@ -340,14 +323,6 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-=======
-              {openRefundRequests.length === 1
-                ? "One refund request is waiting on us."
-                : `${openRefundRequests.length} refund requests are waiting on us.`}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
             {openRefundRequests.map((refundRequest) => (
               <div key={refundRequest.id} className="rounded-md border p-3">
                 <div className="flex items-start justify-between gap-3">

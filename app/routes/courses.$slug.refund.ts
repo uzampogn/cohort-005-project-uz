@@ -7,7 +7,6 @@ import { courses, refunds, users, RefundStatus } from "~/db/schema";
 import { eq } from "drizzle-orm";
 import { parseFormData, parseParams } from "~/lib/validation";
 <<<<<<< HEAD
-<<<<<<< HEAD
 import { getRefundEligibility } from "~/lib/refunds.server";
 import {
   buildRefundRequestEmail,
@@ -15,8 +14,6 @@ import {
 } from "~/lib/refunds";
 import Database from "better-sqlite3";
 =======
-=======
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 import { formatPrice } from "~/lib/utils";
 
 const REFUND_WINDOW_DAYS = 14;
@@ -154,7 +151,6 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
 <<<<<<< HEAD
-<<<<<<< HEAD
   const { purchase, eligibility } = refundCheck;
 
   if (!eligibility.eligible) {
@@ -162,8 +158,6 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
 =======
-=======
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
   if (getOpenRefundRequest(purchase.id)) {
     throw data("You already have an open refund request on this purchase.", {
       status: 409,
@@ -223,9 +217,6 @@ export async function action({ params, request }: Route.ActionArgs) {
     });
   }
 
-<<<<<<< HEAD
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
-=======
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
   const formData = await request.formData();
   const parsed = parseFormData(formData, refundActionSchema);
@@ -268,11 +259,7 @@ export async function action({ params, request }: Route.ActionArgs) {
     learnerEmail: learner.email,
     courseTitle: course.title,
 <<<<<<< HEAD
-<<<<<<< HEAD
     amount: eligibility.amount,
-=======
-    amount: purchase.amountPaid,
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 =======
     amount: purchase.amountPaid,
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)

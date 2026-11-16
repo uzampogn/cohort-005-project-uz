@@ -1,7 +1,6 @@
 # Cadence
 
 <<<<<<< HEAD
-<<<<<<< HEAD
 An online course platform where Learners buy Courses, and Instructors publish them.
 
 ## Language
@@ -37,8 +36,6 @@ _Avoid_: Cancellation offer, refund window (the window is only one part)
 **Chargeback**:
 A payment dispute the cardholder opens with their bank, outside Cadence. Not something a Learner asks Cadence for.
 =======
-=======
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
 Cadence sells video courses to learners. This glossary covers the language around getting money back after a purchase.
 
 ## Language
@@ -73,7 +70,4 @@ _Avoid_: Completed, Paid out
 
 **Failed Refund**:
 A Refund where the money couldn't be sent. The Refund Request stays approved, because the decision hasn't changed.
-<<<<<<< HEAD
->>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
-=======
 >>>>>>> 13465da (create-glossary-and-fix-refund-drift: Create the glossary and rename to Refund)
