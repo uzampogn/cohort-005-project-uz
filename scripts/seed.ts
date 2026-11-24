@@ -12,6 +12,7 @@ import {
   LessonProgressStatus,
   QuestionType,
   TeamMemberRole,
+  RefundStatus,
 } from "../app/db/schema";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2772,6 +2773,104 @@ This course is still in draft while the cluster examples are rewritten against t
     })
     .run();
 
+  // ─── Refund Requests ───
+  // All on Design Systems, which none of the named students own otherwise.
+  // Sophia's is waiting, and she has kept watching since she asked, so the
+  // Admin screen shows a change. James's was approved with an internal note,
+  // Emma's declined. Alex (the Admin) raised one too, which Alex cannot decide.
+
+  function refundablePurchase(userId: number, purchasedDaysAgo: number) {
+    const [purchase] = db
+      .insert(schema.purchases)
+      .values({
+        userId,
+        courseId: course3.id,
+        amountPaid: course3.price,
+        country: "US",
+        createdAt: daysAgo(purchasedDaysAgo),
+      })
+      .returning()
+      .all();
+    return purchase;
+  }
+
+  const sophia = studentByEmail("sophia.davis@student.dev");
+  const sophiaPurchase = refundablePurchase(sophia.id, 6);
+  db.insert(schema.enrollments)
+    .values({ userId: sophia.id, courseId: course3.id, enrolledAt: daysAgo(6) })
+    .run();
+  // Before asking: one lesson, ten minutes.
+  addWatchSession(sophia.id, course3LessonIds[0], 0, 600, 600, 4 * 24);
+  markComplete(sophia.id, course3LessonIds[0], 4);
+  // After asking: another full lesson.
+  addWatchSession(sophia.id, course3LessonIds[1], 0, 900, 900, 1 * 24);
+  markComplete(sophia.id, course3LessonIds[1], 1);
+
+  const james = studentByEmail("james.park@student.dev");
+  const jamesPurchase = refundablePurchase(james.id, 12);
+
+  const emma = studentByEmail("emma.wilson@student.dev");
+  const emmaPurchase = refundablePurchase(emma.id, 10);
+  db.insert(schema.enrollments)
+    .values({ userId: emma.id, courseId: course3.id, enrolledAt: daysAgo(10) })
+    .run();
+
+  const adminPurchase = refundablePurchase(admin.id, 2);
+  db.insert(schema.enrollments)
+    .values({ userId: admin.id, courseId: course3.id, enrolledAt: daysAgo(2) })
+    .run();
+
+  const totalLessonsAtRequest = course3LessonIds.length;
+
+  db.insert(schema.refunds)
+    .values([
+      {
+        purchaseId: sophiaPurchase.id,
+        status: RefundStatus.Requested,
+        reason: "The course is more advanced than the description suggested.",
+        requestedAt: daysAgo(3),
+        secondsWatchedAtRequest: 600,
+        lessonsCompletedAtRequest: 1,
+        totalLessonsAtRequest,
+      },
+      {
+        purchaseId: jamesPurchase.id,
+        status: RefundStatus.Approved,
+        reason: "I bought this by mistake — I meant to buy the TypeScript course.",
+        requestedAt: daysAgo(11),
+        resolvedAt: daysAgo(10),
+        resolvedByUserId: admin.id,
+        amountRefunded: course3.price,
+        internalNote: "Wrong course bought; nothing watched. Easy approve.",
+        secondsWatchedAtRequest: 0,
+        lessonsCompletedAtRequest: 0,
+        totalLessonsAtRequest,
+      },
+      {
+        purchaseId: emmaPurchase.id,
+        status: RefundStatus.Declined,
+        reason: "I don't have time to finish it.",
+        requestedAt: daysAgo(8),
+        resolvedAt: daysAgo(7),
+        resolvedByUserId: admin.id,
+        declineNote:
+          "Your course access never expires, so you can finish it whenever suits you.",
+        secondsWatchedAtRequest: 0,
+        lessonsCompletedAtRequest: 0,
+        totalLessonsAtRequest,
+      },
+      {
+        purchaseId: adminPurchase.id,
+        status: RefundStatus.Requested,
+        reason: "Testing the refund flow on my own account.",
+        requestedAt: daysAgo(1),
+        secondsWatchedAtRequest: 0,
+        lessonsCompletedAtRequest: 0,
+        totalLessonsAtRequest,
+      },
+    ])
+    .run();
+
   // ─── Flush watch events ───
   // Batched: the heartbeat makes these by far the largest table, and one
   // statement per row would dominate the seed's runtime.
@@ -2822,6 +2921,9 @@ This course is still in draft while the cluster examples are rewritten against t
   );
   console.log(
     `  Purchases: ${countRows(schema.purchases)} (${countRows(schema.purchases, gte(schema.purchases.createdAt, sevenDaysAgo))} in the last 7 days), spanning ${historyDays} days`
+  );
+  console.log(
+    `  Refund Requests: ${countRows(schema.refunds)} (${countRows(schema.refunds, eq(schema.refunds.status, RefundStatus.Requested))} requested)`
   );
   console.log(
     `  Teams: ${countRows(schema.teams)}, coupons: ${countRows(schema.coupons)} (${countRows(schema.coupons, isNotNull(schema.coupons.redeemedByUserId))} redeemed)`

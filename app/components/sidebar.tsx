@@ -41,6 +41,8 @@ interface SidebarProps {
   currentUser: CurrentUser | null;
   recentCourses?: RecentCourse[];
   isTeamAdmin?: boolean;
+  /** Counts shown beside nav links, keyed by the link's path. Zero shows nothing. */
+  navBadges?: Partial<Record<string, number>>;
 }
 
 interface NavItem {
@@ -117,6 +119,7 @@ export function Sidebar({
   currentUser,
   recentCourses = [],
   isTeamAdmin = false,
+  navBadges = {},
 }: SidebarProps) {
   const currentUserRole = currentUser?.role ?? null;
   const [isDark, setIsDark] = useState(false);
@@ -160,6 +163,14 @@ export function Sidebar({
             >
               {item.icon}
               {item.label}
+              {(navBadges[item.to] ?? 0) > 0 && (
+                <span
+                  className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground"
+                  aria-label={`${navBadges[item.to]} waiting`}
+                >
+                  {navBadges[item.to]}
+                </span>
+              )}
             </NavLink>
           ))}
         {isTeamAdmin && (

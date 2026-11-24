@@ -21,8 +21,20 @@ export type RefundEligibilityFacts = {
   previouslyRefundedForCourse: boolean;
 };
 
+/** The measures Refund Eligibility was judged on, kept on the Refund Request. */
+export type RefundEvidence = {
+  secondsWatched: number;
+  lessonsCompleted: number;
+  totalLessons: number;
+};
+
 export type RefundEligibility =
-  | { eligible: true; amount: number; lastDayInWindow: string }
+  | {
+      eligible: true;
+      amount: number;
+      lastDayInWindow: string;
+      judgedOn: RefundEvidence;
+    }
   | { eligible: false; reason: string };
 
 // The window is counted in whole days, not hours: a Learner who buys at 23:00
@@ -31,6 +43,21 @@ function calendarDay(when: Date): string {
   const month = String(when.getMonth() + 1).padStart(2, "0");
   const day = String(when.getDate()).padStart(2, "0");
   return `${when.getFullYear()}-${month}-${day}`;
+}
+
+function startOfCalendarDay(when: Date): Date {
+  return new Date(when.getFullYear(), when.getMonth(), when.getDate());
+}
+
+/**
+ * Whole calendar days from the Purchase to `on`, counted like the fourteen-day
+ * window: the day of the Purchase is day zero, its last day is day fourteen.
+ */
+export function daysSincePurchase(purchasedAt: Date, on: Date): number {
+  const elapsed =
+    startOfCalendarDay(on).getTime() - startOfCalendarDay(purchasedAt).getTime();
+  // Rounded, because a clock change makes a calendar day 23 or 25 hours long.
+  return Math.round(elapsed / 86_400_000);
 }
 
 function lastDayOfWindow(purchasedAt: Date): string {
@@ -96,7 +123,64 @@ export function checkRefundEligibility(
     };
   }
 
-  return { eligible: true, amount: facts.amountPaid, lastDayInWindow };
+  return {
+    eligible: true,
+    amount: facts.amountPaid,
+    lastDayInWindow,
+    judgedOn: {
+      // Watch positions are fractional; whole seconds are enough to compare.
+      secondsWatched: Math.round(facts.secondsWatched),
+      lessonsCompleted: facts.lessonsCompleted,
+      totalLessons: facts.totalLessons,
+    },
+  };
+}
+
+export type EvidenceChange = {
+  then: number | null;
+  now: number;
+  changed: boolean;
+};
+
+export type RefundEvidenceComparison = {
+  [Measure in keyof RefundEvidence]: EvidenceChange;
+} & { anyChanged: boolean };
+
+/** Refund Evidence as it stood when the Learner asked; null where unknown. */
+export type RecordedRefundEvidence = {
+  [Measure in keyof RefundEvidence]: number | null;
+};
+
+/**
+ * What the Learner's Refund Eligibility was judged on when they asked, against
+ * the same measures now. A measure that wasn't recorded (or `then` itself, for
+ * a Refund Request with no snapshot) is never flagged.
+ */
+export function compareRefundEvidence(
+  then: RecordedRefundEvidence | null,
+  now: RefundEvidence
+): RefundEvidenceComparison {
+  const measure = (key: keyof RefundEvidence): EvidenceChange => {
+    const nowValue = Math.round(now[key]);
+    const thenValue = then === null ? null : then[key];
+    return {
+      then: thenValue,
+      now: nowValue,
+      changed: thenValue !== null && thenValue !== nowValue,
+    };
+  };
+
+  const secondsWatched = measure("secondsWatched");
+  const lessonsCompleted = measure("lessonsCompleted");
+  const totalLessons = measure("totalLessons");
+
+  return {
+    secondsWatched,
+    lessonsCompleted,
+    totalLessons,
+    anyChanged:
+      secondsWatched.changed || lessonsCompleted.changed || totalLessons.changed,
+  };
 }
 
 /**

@@ -3,6 +3,8 @@ import {
   buildRefundOutcomeEmail,
   buildRefundRequestEmail,
   checkRefundEligibility,
+  compareRefundEvidence,
+  daysSincePurchase,
   type RefundEligibilityFacts,
 } from "./refunds";
 
@@ -34,6 +36,19 @@ describe("checkRefundEligibility", () => {
       eligible: true,
       amount: 3950,
       lastDayInWindow: "2026-01-15",
+      judgedOn: { secondsWatched: 0, lessonsCompleted: 0, totalLessons: 10 },
+    });
+  });
+
+  it("records what it judged on, so the Admin can compare it with later", () => {
+    const result = checkRefundEligibility(
+      facts({ secondsWatched: 1234.6, lessonsCompleted: 3, totalLessons: 12 })
+    );
+
+    expect(result.eligible && result.judgedOn).toEqual({
+      secondsWatched: 1235,
+      lessonsCompleted: 3,
+      totalLessons: 12,
     });
   });
 
@@ -278,5 +293,100 @@ describe("buildRefundOutcomeEmail", () => {
         /reversal|chargeback/i
       );
     }
+  });
+});
+
+describe("compareRefundEvidence", () => {
+  const asked = { secondsWatched: 600, lessonsCompleted: 1, totalLessons: 10 };
+
+  it("flags watching done since the Learner asked", () => {
+    const comparison = compareRefundEvidence(asked, {
+      ...asked,
+      secondsWatched: 1500,
+    });
+
+    expect(comparison.secondsWatched).toEqual({
+      then: 600,
+      now: 1500,
+      changed: true,
+    });
+    expect(comparison.anyChanged).toBe(true);
+  });
+
+  it("flags nothing when the Learner has done nothing since asking", () => {
+    expect(compareRefundEvidence(asked, { ...asked }).anyChanged).toBe(false);
+  });
+
+  it("ignores a fraction of a second of extra watching", () => {
+    const comparison = compareRefundEvidence(asked, {
+      ...asked,
+      secondsWatched: 600.4,
+    });
+
+    expect(comparison.secondsWatched).toEqual({
+      then: 600,
+      now: 600,
+      changed: false,
+    });
+  });
+
+  it("flags lessons completed and lessons added to the Course since", () => {
+    const comparison = compareRefundEvidence(asked, {
+      secondsWatched: 600,
+      lessonsCompleted: 4,
+      totalLessons: 12,
+    });
+
+    expect(comparison.lessonsCompleted.changed).toBe(true);
+    expect(comparison.totalLessons).toEqual({
+      then: 10,
+      now: 12,
+      changed: true,
+    });
+  });
+
+  it("still compares watch time when only that could be measured as it was", () => {
+    const comparison = compareRefundEvidence(
+      { secondsWatched: 600, lessonsCompleted: null, totalLessons: null },
+      { secondsWatched: 1500, lessonsCompleted: 4, totalLessons: 12 }
+    );
+
+    expect(comparison.secondsWatched.changed).toBe(true);
+    expect(comparison.lessonsCompleted).toEqual({
+      then: null,
+      now: 4,
+      changed: false,
+    });
+    expect(comparison.anyChanged).toBe(true);
+  });
+
+  it("flags nothing for a Refund Request raised before the snapshot was kept", () => {
+    const comparison = compareRefundEvidence(null, {
+      secondsWatched: 5000,
+      lessonsCompleted: 4,
+      totalLessons: 12,
+    });
+
+    expect(comparison.secondsWatched).toEqual({
+      then: null,
+      now: 5000,
+      changed: false,
+    });
+    expect(comparison.anyChanged).toBe(false);
+  });
+});
+
+describe("daysSincePurchase", () => {
+  it("counts the day of the Purchase as day zero", () => {
+    expect(daysSincePurchase(purchasedAt, new Date(2026, 0, 1, 23, 59))).toBe(0);
+  });
+
+  it("counts whole calendar days, not 24-hour stretches", () => {
+    // Bought at 23:00, and half an hour later it is the next calendar day.
+    expect(daysSincePurchase(purchasedAt, new Date(2026, 0, 2, 0, 30))).toBe(1);
+  });
+
+  it("agrees with the window: the last day of it is day fourteen", () => {
+    expect(daysSincePurchase(purchasedAt, new Date(2026, 0, 15, 12, 0))).toBe(14);
   });
 });

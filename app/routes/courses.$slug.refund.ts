@@ -90,6 +90,10 @@ export async function action({ params, request }: Route.ActionArgs) {
         purchaseId: purchase.id,
         status: RefundStatus.Requested,
         reason: parsed.data.reason,
+        // What eligibility was judged on, so the Admin can see what changed.
+        secondsWatchedAtRequest: eligibility.judgedOn.secondsWatched,
+        lessonsCompletedAtRequest: eligibility.judgedOn.lessonsCompleted,
+        totalLessonsAtRequest: eligibility.judgedOn.totalLessons,
       })
       .run();
   } catch (error) {
