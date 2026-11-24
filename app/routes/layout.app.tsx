@@ -17,7 +17,9 @@ import {
   teamMembers,
   TeamMemberRole,
   LessonProgressStatus,
+  UserRole,
 } from "~/db/schema";
+import { countRequestedRefundRequests } from "~/lib/refunds.server";
 
 function getAllUsers() {
   return db.select().from(users).all();
@@ -213,6 +215,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     countryTierInfo,
     countries: COUNTRIES,
     isTeamAdmin: currentUserId ? isTeamAdmin(currentUserId) : false,
+    // Counts shown beside sidebar links, keyed by the link's path.
+    navBadges:
+      currentUser?.role === UserRole.Admin
+        ? { "/admin/refunds": countRequestedRefundRequests() }
+        : {},
   };
 }
 
@@ -225,6 +232,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     countryTierInfo,
     countries,
     isTeamAdmin: userIsTeamAdmin,
+    navBadges,
   } = loaderData;
 
   return (
@@ -233,6 +241,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
         currentUser={currentUser}
         recentCourses={recentCourses}
         isTeamAdmin={userIsTeamAdmin}
+        navBadges={navBadges}
       />
       <main className="flex-1 overflow-y-auto">
         <Outlet />

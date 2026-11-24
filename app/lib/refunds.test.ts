@@ -3,6 +3,7 @@ import {
   buildRefundOutcomeEmail,
   buildRefundRequestEmail,
   checkRefundEligibility,
+  compareRefundEvidence,
   type RefundEligibilityFacts,
 } from "./refunds";
 
@@ -34,6 +35,19 @@ describe("checkRefundEligibility", () => {
       eligible: true,
       amount: 3950,
       lastDayInWindow: "2026-01-15",
+      judgedOn: { secondsWatched: 0, lessonsCompleted: 0, totalLessons: 10 },
+    });
+  });
+
+  it("records what it judged on, so the Admin can compare it with later", () => {
+    const result = checkRefundEligibility(
+      facts({ secondsWatched: 1234.6, lessonsCompleted: 3, totalLessons: 12 })
+    );
+
+    expect(result.eligible && result.judgedOn).toEqual({
+      secondsWatched: 1235,
+      lessonsCompleted: 3,
+      totalLessons: 12,
     });
   });
 
@@ -278,5 +292,70 @@ describe("buildRefundOutcomeEmail", () => {
         /reversal|chargeback/i
       );
     }
+  });
+});
+
+describe("compareRefundEvidence", () => {
+  const asked = { secondsWatched: 600, lessonsCompleted: 1, totalLessons: 10 };
+
+  it("flags watching done since the Learner asked", () => {
+    const comparison = compareRefundEvidence(asked, {
+      ...asked,
+      secondsWatched: 1500,
+    });
+
+    expect(comparison.secondsWatched).toEqual({
+      then: 600,
+      now: 1500,
+      changed: true,
+    });
+    expect(comparison.anyChanged).toBe(true);
+  });
+
+  it("flags nothing when the Learner has done nothing since asking", () => {
+    expect(compareRefundEvidence(asked, { ...asked }).anyChanged).toBe(false);
+  });
+
+  it("ignores a fraction of a second of extra watching", () => {
+    const comparison = compareRefundEvidence(asked, {
+      ...asked,
+      secondsWatched: 600.4,
+    });
+
+    expect(comparison.secondsWatched).toEqual({
+      then: 600,
+      now: 600,
+      changed: false,
+    });
+  });
+
+  it("flags lessons completed and lessons added to the Course since", () => {
+    const comparison = compareRefundEvidence(asked, {
+      secondsWatched: 600,
+      lessonsCompleted: 4,
+      totalLessons: 12,
+    });
+
+    expect(comparison.lessonsCompleted.changed).toBe(true);
+    expect(comparison.totalLessons).toEqual({
+      then: 10,
+      now: 12,
+      changed: true,
+    });
+  });
+
+  it("flags nothing for a Refund Request raised before the snapshot was kept", () => {
+    const comparison = compareRefundEvidence(null, {
+      secondsWatched: 5000,
+      lessonsCompleted: 4,
+      totalLessons: 12,
+    });
+
+    expect(comparison.secondsWatched).toEqual({
+      then: null,
+      now: 5000,
+      changed: false,
+    });
+    expect(comparison.anyChanged).toBe(false);
   });
 });

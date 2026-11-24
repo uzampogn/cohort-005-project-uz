@@ -251,6 +251,13 @@ export const refunds = sqliteTable(
     resolvedByUserId: integer("resolved_by_user_id").references(() => users.id),
     // Set only on a decline: the Admin's explanation, which the Learner reads.
     declineNote: text("decline_note"),
+    // Optional, set on approve: an Admin's internal note. Never shown to the Learner.
+    staffNote: text("staff_note"),
+    // What Refund Eligibility was judged on when the Learner asked. Null on
+    // Refund Requests raised before the snapshot existed.
+    secondsWatchedAtRequest: integer("seconds_watched_at_request"),
+    lessonsCompletedAtRequest: integer("lessons_completed_at_request"),
+    totalLessonsAtRequest: integer("total_lessons_at_request"),
   },
   // One Refund Request per Purchase, ever — enforced here so two submissions
   // arriving at once cannot both land.

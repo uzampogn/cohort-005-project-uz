@@ -21,8 +21,20 @@ export type RefundEligibilityFacts = {
   previouslyRefundedForCourse: boolean;
 };
 
+/** The measures Refund Eligibility was judged on, kept on the Refund Request. */
+export type RefundEvidence = {
+  secondsWatched: number;
+  lessonsCompleted: number;
+  totalLessons: number;
+};
+
 export type RefundEligibility =
-  | { eligible: true; amount: number; lastDayInWindow: string }
+  | {
+      eligible: true;
+      amount: number;
+      lastDayInWindow: string;
+      judgedOn: RefundEvidence;
+    }
   | { eligible: false; reason: string };
 
 // The window is counted in whole days, not hours: a Learner who buys at 23:00
@@ -96,7 +108,59 @@ export function checkRefundEligibility(
     };
   }
 
-  return { eligible: true, amount: facts.amountPaid, lastDayInWindow };
+  return {
+    eligible: true,
+    amount: facts.amountPaid,
+    lastDayInWindow,
+    judgedOn: {
+      // Watch positions are fractional; whole seconds are enough to compare.
+      secondsWatched: Math.round(facts.secondsWatched),
+      lessonsCompleted: facts.lessonsCompleted,
+      totalLessons: facts.totalLessons,
+    },
+  };
+}
+
+export type EvidenceChange = {
+  then: number | null;
+  now: number;
+  changed: boolean;
+};
+
+export type RefundEvidenceComparison = {
+  [Measure in keyof RefundEvidence]: EvidenceChange;
+} & { anyChanged: boolean };
+
+/**
+ * What the Learner's Refund Eligibility was judged on when they asked, against
+ * the same measures now. `then` is null for a Refund Request raised before the
+ * snapshot was kept; nothing is flagged for it.
+ */
+export function compareRefundEvidence(
+  then: RefundEvidence | null,
+  now: RefundEvidence
+): RefundEvidenceComparison {
+  const measure = (key: keyof RefundEvidence): EvidenceChange => {
+    const nowValue = Math.round(now[key]);
+    const thenValue = then === null ? null : then[key];
+    return {
+      then: thenValue,
+      now: nowValue,
+      changed: thenValue !== null && thenValue !== nowValue,
+    };
+  };
+
+  const secondsWatched = measure("secondsWatched");
+  const lessonsCompleted = measure("lessonsCompleted");
+  const totalLessons = measure("totalLessons");
+
+  return {
+    secondsWatched,
+    lessonsCompleted,
+    totalLessons,
+    anyChanged:
+      secondsWatched.changed || lessonsCompleted.changed || totalLessons.changed,
+  };
 }
 
 /**

@@ -11,7 +11,11 @@ import {
   LessonProgressStatus,
   RefundStatus,
 } from "~/db/schema";
-import { checkRefundEligibility, type RefundEligibility } from "~/lib/refunds";
+import {
+  checkRefundEligibility,
+  type RefundEligibility,
+  type RefundEvidence,
+} from "~/lib/refunds";
 
 function getLatestPurchase(userId: number, courseId: number) {
   return db
@@ -80,6 +84,30 @@ export function getSecondsWatched(
     .groupBy(videoWatchEvents.lessonId)
     .all()
     .reduce((total, row) => total + row.furthest, 0);
+}
+
+/** The measures Refund Eligibility is judged on, as they stand now. */
+export function getRefundEvidence(
+  userId: number,
+  courseId: number
+): RefundEvidence {
+  const lessonIds = getLessonIdsForCourse(courseId);
+  return {
+    secondsWatched: getSecondsWatched(userId, courseId),
+    lessonsCompleted: countCompletedLessons(userId, lessonIds),
+    totalLessons: lessonIds.length,
+  };
+}
+
+/** How many Refund Requests are waiting on an Admin. */
+export function countRequestedRefundRequests(): number {
+  return (
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(refunds)
+      .where(eq(refunds.status, RefundStatus.Requested))
+      .get()?.count ?? 0
+  );
 }
 
 // A Purchase with Team Seats attached, claimed or not, is a team licence.

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, ne } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { data, isRouteErrorResponse, Link } from "react-router";
 import { AlertTriangle, ReceiptText } from "lucide-react";
 import type { Route } from "./+types/admin.refunds";
@@ -18,8 +19,12 @@ import {
 } from "~/db/schema";
 import { requireAdmin } from "~/lib/access.server";
 import { resolveRefundRequest } from "~/lib/refund-resolution";
-import { buildRefundOutcomeEmail } from "~/lib/refunds";
-import { getSecondsWatched } from "~/lib/refunds.server";
+import {
+  buildRefundOutcomeEmail,
+  compareRefundEvidence,
+  type EvidenceChange,
+} from "~/lib/refunds";
+import { getRefundEvidence } from "~/lib/refunds.server";
 import { formatPrice } from "~/lib/utils";
 import { parseFormData } from "~/lib/validation";
 import { Card, CardContent } from "~/components/ui/card";
@@ -30,6 +35,8 @@ const refundActionSchema = z.discriminatedUnion("intent", [
   z.object({
     intent: z.literal("approve"),
     refundId: z.coerce.number().int(),
+    // Internal only: the Learner never sees it.
+    note: z.string().max(1000).optional(),
   }),
   z.object({
     intent: z.literal("decline"),
@@ -44,6 +51,10 @@ function getOpenRefundRequests() {
       id: refunds.id,
       reason: refunds.reason,
       requestedAt: refunds.requestedAt,
+      purchasedAt: purchases.createdAt,
+      secondsWatchedAtRequest: refunds.secondsWatchedAtRequest,
+      lessonsCompletedAtRequest: refunds.lessonsCompletedAtRequest,
+      totalLessonsAtRequest: refunds.totalLessonsAtRequest,
       amountPaid: purchases.amountPaid,
       learnerId: users.id,
       learnerName: users.name,
@@ -59,6 +70,42 @@ function getOpenRefundRequests() {
     .where(eq(refunds.status, RefundStatus.Requested))
     .orderBy(asc(refunds.requestedAt))
     .all();
+}
+
+const resolvers = alias(users, "resolvers");
+
+const RECENTLY_DECIDED_LIMIT = 20;
+
+function getRecentlyDecidedRefundRequests() {
+  return db
+    .select({
+      id: refunds.id,
+      status: refunds.status,
+      resolvedAt: refunds.resolvedAt,
+      amountRefunded: refunds.amountRefunded,
+      declineNote: refunds.declineNote,
+      staffNote: refunds.staffNote,
+      learnerName: users.name,
+      courseTitle: courses.title,
+      resolvedByName: resolvers.name,
+    })
+    .from(refunds)
+    .innerJoin(purchases, eq(refunds.purchaseId, purchases.id))
+    .innerJoin(users, eq(purchases.userId, users.id))
+    .innerJoin(courses, eq(purchases.courseId, courses.id))
+    .leftJoin(resolvers, eq(refunds.resolvedByUserId, resolvers.id))
+    .where(ne(refunds.status, RefundStatus.Requested))
+    .orderBy(desc(refunds.resolvedAt))
+    .limit(RECENTLY_DECIDED_LIMIT)
+    .all();
+}
+
+// Whole calendar days between two moments, the way the Refund Window counts.
+function calendarDaysBetween(fromIso: string, to: Date) {
+  const from = new Date(fromIso);
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.round((end.getTime() - start.getTime()) / 86_400_000);
 }
 
 function getRefundRequestForResolution(refundId: number) {
@@ -97,21 +144,48 @@ export function meta() {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireAdmin(request);
+  const { userId } = await requireAdmin(request);
+  const now = new Date();
 
-  const requests = getOpenRefundRequests().map((refundRequest) => ({
-    ...refundRequest,
-    // Watched now minus watched as of asking, both measured the way Refund
-    // Eligibility measures it. Positions are fractional, so round for display.
-    secondsWatchedSince: Math.round(
-      getSecondsWatched(refundRequest.learnerId, refundRequest.courseId) -
-        getSecondsWatched(refundRequest.learnerId, refundRequest.courseId, {
-          asOf: refundRequest.requestedAt,
-        })
-    ),
-  }));
+  const requests = getOpenRefundRequests().map((refundRequest) => {
+    const {
+      secondsWatchedAtRequest,
+      lessonsCompletedAtRequest,
+      totalLessonsAtRequest,
+      ...rest
+    } = refundRequest;
 
-  return { requests };
+    // Refund Eligibility was judged when the Learner asked (see GLOSSARY.md).
+    // Show what it was judged on beside the same measures now.
+    const judgedOn =
+      secondsWatchedAtRequest === null ||
+      lessonsCompletedAtRequest === null ||
+      totalLessonsAtRequest === null
+        ? null
+        : {
+            secondsWatched: secondsWatchedAtRequest,
+            lessonsCompleted: lessonsCompletedAtRequest,
+            totalLessons: totalLessonsAtRequest,
+          };
+
+    return {
+      ...rest,
+      isOwnRefundRequest: refundRequest.learnerId === userId,
+      daysSincePurchase: {
+        then: calendarDaysBetween(
+          refundRequest.purchasedAt,
+          new Date(refundRequest.requestedAt)
+        ),
+        now: calendarDaysBetween(refundRequest.purchasedAt, now),
+      },
+      evidence: compareRefundEvidence(
+        judgedOn,
+        getRefundEvidence(refundRequest.learnerId, refundRequest.courseId)
+      ),
+    };
+  });
+
+  return { requests, recentlyDecided: getRecentlyDecidedRefundRequests() };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -135,7 +209,12 @@ export async function action({ request }: Route.ActionArgs) {
   const resolution = resolveRefundRequest(
     refundRequest,
     parsed.data.intent === "approve"
-      ? { decision: "approve", resolvedByUserId: userId, resolvedAt }
+      ? {
+          decision: "approve",
+          note: parsed.data.note,
+          resolvedByUserId: userId,
+          resolvedAt,
+        }
       : {
           decision: "decline",
           note: parsed.data.note,
@@ -145,7 +224,13 @@ export async function action({ request }: Route.ActionArgs) {
   );
 
   if (!resolution.ok) {
-    throw data(resolution.error, { status: 409 });
+    // Deciding your own Refund Request is forbidden, not a conflict.
+    const status =
+      refundRequest.learnerId === userId &&
+      refundRequest.status === RefundStatus.Requested
+        ? 403
+        : 409;
+    throw data(resolution.error, { status });
   }
 
   const { update } = resolution;
@@ -226,6 +311,61 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 type OpenRefundRequest = Route.ComponentProps["loaderData"]["requests"][number];
+type DecidedRefundRequest =
+  Route.ComponentProps["loaderData"]["recentlyDecided"][number];
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function EvidenceLine({
+  label,
+  change,
+  format = String,
+}: {
+  label: string;
+  change: EvidenceChange;
+  format?: (value: number) => string;
+}) {
+  return (
+    <li className={change.changed ? "font-medium text-amber-600" : undefined}>
+      {label}:{" "}
+      {change.then === null ? "not recorded" : format(change.then)}
+      {change.changed && <> → {format(change.now)}</>}
+    </li>
+  );
+}
+
+function SinceAsking({ refundRequest }: { refundRequest: OpenRefundRequest }) {
+  const { evidence, daysSincePurchase } = refundRequest;
+  return (
+    <div className="text-xs text-muted-foreground">
+      {evidence.anyChanged && (
+        <p className="mb-1 flex items-center gap-1 font-medium text-amber-600">
+          <AlertTriangle className="size-3" /> Changed since asking
+        </p>
+      )}
+      <ul className="space-y-0.5">
+        <li>
+          Asked {daysSincePurchase.then}{" "}
+          {daysSincePurchase.then === 1 ? "day" : "days"} after buying (
+          {daysSincePurchase.now} now)
+        </li>
+        <EvidenceLine
+          label="Watched"
+          change={evidence.secondsWatched}
+          format={formatWatchTime}
+        />
+        <EvidenceLine label="Lessons completed" change={evidence.lessonsCompleted} />
+        <EvidenceLine label="Lessons in course" change={evidence.totalLessons} />
+      </ul>
+    </div>
+  );
+}
 
 function RefundRequestRow({
   refundRequest,
@@ -233,7 +373,7 @@ function RefundRequestRow({
   refundRequest: OpenRefundRequest;
 }) {
   const fetcher = useFetcher<typeof action>();
-  const [declining, setDeclining] = useState(false);
+  const [deciding, setDeciding] = useState<"approve" | "decline" | null>(null);
   const [note, setNote] = useState("");
   const busy = fetcher.state !== "idle";
 
@@ -248,10 +388,12 @@ function RefundRequestRow({
     );
   }, [fetcher.state, fetcher.data]);
 
-  const requestedOn = new Date(refundRequest.requestedAt).toLocaleDateString(
-    "en-US",
-    { year: "numeric", month: "short", day: "numeric" }
-  );
+  const requestedOn = formatDate(refundRequest.requestedAt);
+
+  function stopDeciding() {
+    setDeciding(null);
+    setNote("");
+  }
 
   return (
     <tr className="border-b border-border align-top last:border-0">
@@ -277,35 +419,49 @@ function RefundRequestRow({
       </td>
       <td className="px-4 py-3 text-sm text-muted-foreground">{requestedOn}</td>
       <td className="px-4 py-3 text-sm text-muted-foreground">
-        {formatWatchTime(refundRequest.secondsWatchedSince)}
+        <SinceAsking refundRequest={refundRequest} />
       </td>
       <td className="px-4 py-3">
-        {declining ? (
+        {refundRequest.isOwnRefundRequest ? (
+          <p className="w-48 text-xs text-muted-foreground">
+            This is your own Refund Request. Another Admin needs to decide it.
+          </p>
+        ) : deciding ? (
           <fetcher.Form method="post" className="flex w-64 flex-col gap-2">
-            <input type="hidden" name="intent" value="decline" />
+            <input type="hidden" name="intent" value={deciding} />
             <input type="hidden" name="refundId" value={refundRequest.id} />
             <Textarea
               name="note"
-              required
-              placeholder="Why is this declined? The Learner will read this."
+              required={deciding === "decline"}
+              placeholder={
+                deciding === "decline"
+                  ? "Why is this declined? The Learner will read this."
+                  : "Internal note (optional). The Learner never sees this."
+              }
               value={note}
               onChange={(event) => setNote(event.target.value)}
             />
             <div className="flex gap-2">
-              <Button
-                type="submit"
-                size="sm"
-                variant="destructive"
-                disabled={busy || note.trim() === ""}
-              >
-                Decline
-              </Button>
+              {deciding === "decline" ? (
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="destructive"
+                  disabled={busy || note.trim() === ""}
+                >
+                  Decline
+                </Button>
+              ) : (
+                <Button type="submit" size="sm" disabled={busy}>
+                  Approve {formatPrice(refundRequest.amountPaid)}
+                </Button>
+              )}
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
                 disabled={busy}
-                onClick={() => setDeclining(false)}
+                onClick={stopDeciding}
               >
                 Cancel
               </Button>
@@ -313,19 +469,20 @@ function RefundRequestRow({
           </fetcher.Form>
         ) : (
           <div className="flex gap-2">
-            <fetcher.Form method="post">
-              <input type="hidden" name="intent" value="approve" />
-              <input type="hidden" name="refundId" value={refundRequest.id} />
-              <Button type="submit" size="sm" disabled={busy}>
-                Approve
-              </Button>
-            </fetcher.Form>
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy}
+              onClick={() => setDeciding("approve")}
+            >
+              Approve…
+            </Button>
             <Button
               type="button"
               size="sm"
               variant="outline"
               disabled={busy}
-              onClick={() => setDeclining(true)}
+              onClick={() => setDeciding("decline")}
             >
               Decline…
             </Button>
@@ -342,12 +499,72 @@ const COLUMNS = [
   "Amount paid",
   "Reason",
   "Requested",
-  "Watched since",
+  "Since asking",
   "",
 ];
 
+function RecentlyDecided({
+  decided,
+}: {
+  decided: DecidedRefundRequest[];
+}) {
+  if (decided.length === 0) return null;
+
+  return (
+    <section className="mt-10">
+      <h2 className="mb-1 text-xl font-semibold">Recently decided</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        The last {decided.length} decisions. Internal notes are for Admins only.
+      </p>
+      <Card>
+        <CardContent className="p-0">
+          <ul className="divide-y divide-border">
+            {decided.map((refundRequest) => {
+              const approved = refundRequest.status === RefundStatus.Approved;
+              return (
+                <li key={refundRequest.id} className="px-4 py-3 text-sm">
+                  <p>
+                    <span
+                      className={
+                        approved
+                          ? "font-medium text-green-600"
+                          : "font-medium text-destructive"
+                      }
+                    >
+                      {approved ? "Approved" : "Declined"}
+                    </span>{" "}
+                    · {refundRequest.learnerName} · {refundRequest.courseTitle}
+                    {approved && refundRequest.amountRefunded !== null && (
+                      <> · {formatPrice(refundRequest.amountRefunded)}</>
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {refundRequest.resolvedByName ?? "Unknown Admin"}
+                    {refundRequest.resolvedAt &&
+                      ` on ${formatDate(refundRequest.resolvedAt)}`}
+                  </p>
+                  {refundRequest.declineNote && (
+                    <p className="mt-1 text-xs">
+                      Note to the Learner: {refundRequest.declineNote}
+                    </p>
+                  )}
+                  {refundRequest.staffNote && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Internal note: {refundRequest.staffNote}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
 export default function AdminRefunds({ loaderData }: Route.ComponentProps) {
-  const { requests } = loaderData;
+  const { requests, recentlyDecided } = loaderData;
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
@@ -412,6 +629,8 @@ export default function AdminRefunds({ loaderData }: Route.ComponentProps) {
           </CardContent>
         </Card>
       )}
+
+      <RecentlyDecided decided={recentlyDecided} />
     </div>
   );
 }

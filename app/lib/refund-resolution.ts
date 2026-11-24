@@ -4,6 +4,8 @@ export type RefundRequestToResolve = {
   status: RefundStatus;
   /** What the Purchase cost the Learner, in cents. */
   amountPaid: number;
+  /** The Learner who raised the Refund Request. */
+  learnerId: number;
 };
 
 type Resolver = {
@@ -12,7 +14,7 @@ type Resolver = {
 };
 
 export type RefundDecision =
-  | ({ decision: "approve" } & Resolver)
+  | ({ decision: "approve"; note?: string } & Resolver)
   | ({ decision: "decline"; note: string } & Resolver);
 
 export type RefundResolutionUpdate = {
@@ -21,6 +23,8 @@ export type RefundResolutionUpdate = {
   resolvedAt: string;
   resolvedByUserId: number;
   declineNote: string | null;
+  /** The Admin's internal note on an approval. Never shown to the Learner. */
+  staffNote: string | null;
 };
 
 export type RefundResolution =
@@ -35,6 +39,10 @@ export function resolveRefundRequest(
     return { ok: false, error: "This Refund Request has already been resolved." };
   }
 
+  if (request.learnerId === decision.resolvedByUserId) {
+    return { ok: false, error: "You cannot decide your own Refund Request." };
+  }
+
   if (decision.decision === "decline") {
     if (decision.note.trim() === "") {
       return { ok: false, error: "A decline needs a note the Learner can read." };
@@ -47,6 +55,7 @@ export function resolveRefundRequest(
         resolvedAt: decision.resolvedAt,
         resolvedByUserId: decision.resolvedByUserId,
         declineNote: decision.note,
+        staffNote: null,
       },
     };
   }
@@ -59,6 +68,7 @@ export function resolveRefundRequest(
       resolvedAt: decision.resolvedAt,
       resolvedByUserId: decision.resolvedByUserId,
       declineNote: null,
+      staffNote: decision.note?.trim() || null,
     },
   };
 }
