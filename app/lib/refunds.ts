@@ -45,6 +45,21 @@ function calendarDay(when: Date): string {
   return `${when.getFullYear()}-${month}-${day}`;
 }
 
+function startOfCalendarDay(when: Date): Date {
+  return new Date(when.getFullYear(), when.getMonth(), when.getDate());
+}
+
+/**
+ * Whole calendar days from the Purchase to `on`, counted like the fourteen-day
+ * window: the day of the Purchase is day zero, its last day is day fourteen.
+ */
+export function daysSincePurchase(purchasedAt: Date, on: Date): number {
+  const elapsed =
+    startOfCalendarDay(on).getTime() - startOfCalendarDay(purchasedAt).getTime();
+  // Rounded, because a clock change makes a calendar day 23 or 25 hours long.
+  return Math.round(elapsed / 86_400_000);
+}
+
 function lastDayOfWindow(purchasedAt: Date): string {
   const deadline = new Date(purchasedAt);
   deadline.setDate(deadline.getDate() + REFUND_WINDOW_DAYS);
@@ -131,13 +146,18 @@ export type RefundEvidenceComparison = {
   [Measure in keyof RefundEvidence]: EvidenceChange;
 } & { anyChanged: boolean };
 
+/** Refund Evidence as it stood when the Learner asked; null where unknown. */
+export type RecordedRefundEvidence = {
+  [Measure in keyof RefundEvidence]: number | null;
+};
+
 /**
  * What the Learner's Refund Eligibility was judged on when they asked, against
- * the same measures now. `then` is null for a Refund Request raised before the
- * snapshot was kept; nothing is flagged for it.
+ * the same measures now. A measure that wasn't recorded (or `then` itself, for
+ * a Refund Request with no snapshot) is never flagged.
  */
 export function compareRefundEvidence(
-  then: RefundEvidence | null,
+  then: RecordedRefundEvidence | null,
   now: RefundEvidence
 ): RefundEvidenceComparison {
   const measure = (key: keyof RefundEvidence): EvidenceChange => {

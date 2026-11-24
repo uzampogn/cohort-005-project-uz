@@ -2841,7 +2841,7 @@ This course is still in draft while the cluster examples are rewritten against t
         resolvedAt: daysAgo(10),
         resolvedByUserId: admin.id,
         amountRefunded: course3.price,
-        staffNote: "Wrong course bought; nothing watched. Easy approve.",
+        internalNote: "Wrong course bought; nothing watched. Easy approve.",
         secondsWatchedAtRequest: 0,
         lessonsCompletedAtRequest: 0,
         totalLessonsAtRequest,

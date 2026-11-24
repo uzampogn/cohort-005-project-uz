@@ -18,13 +18,18 @@ import {
   users,
 } from "~/db/schema";
 import { requireAdmin } from "~/lib/access.server";
-import { resolveRefundRequest } from "~/lib/refund-resolution";
+import {
+  isOwnRefundRequest,
+  resolveRefundRequest,
+  type RefundRefusal,
+} from "~/lib/refund-resolution";
 import {
   buildRefundOutcomeEmail,
   compareRefundEvidence,
+  daysSincePurchase,
   type EvidenceChange,
 } from "~/lib/refunds";
-import { getRefundEvidence } from "~/lib/refunds.server";
+import { getRefundEvidence, getSecondsWatched } from "~/lib/refunds.server";
 import { formatPrice } from "~/lib/utils";
 import { parseFormData } from "~/lib/validation";
 import { Card, CardContent } from "~/components/ui/card";
@@ -72,6 +77,13 @@ function getOpenRefundRequests() {
     .all();
 }
 
+// Deciding your own Refund Request is forbidden, not a conflict.
+const REFUSAL_STATUS: Record<RefundRefusal, number> = {
+  "already-resolved": 409,
+  "own-refund-request": 403,
+  "missing-decline-note": 400,
+};
+
 const resolvers = alias(users, "resolvers");
 
 const RECENTLY_DECIDED_LIMIT = 20;
@@ -84,7 +96,7 @@ function getRecentlyDecidedRefundRequests() {
       resolvedAt: refunds.resolvedAt,
       amountRefunded: refunds.amountRefunded,
       declineNote: refunds.declineNote,
-      staffNote: refunds.staffNote,
+      internalNote: refunds.internalNote,
       learnerName: users.name,
       courseTitle: courses.title,
       resolvedByName: resolvers.name,
@@ -98,14 +110,6 @@ function getRecentlyDecidedRefundRequests() {
     .orderBy(desc(refunds.resolvedAt))
     .limit(RECENTLY_DECIDED_LIMIT)
     .all();
-}
-
-// Whole calendar days between two moments, the way the Refund Window counts.
-function calendarDaysBetween(fromIso: string, to: Date) {
-  const from = new Date(fromIso);
-  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
-  return Math.round((end.getTime() - start.getTime()) / 86_400_000);
 }
 
 function getRefundRequestForResolution(refundId: number) {
@@ -156,27 +160,30 @@ export async function loader({ request }: Route.LoaderArgs) {
     } = refundRequest;
 
     // Refund Eligibility was judged when the Learner asked (see GLOSSARY.md).
-    // Show what it was judged on beside the same measures now.
-    const judgedOn =
-      secondsWatchedAtRequest === null ||
-      lessonsCompletedAtRequest === null ||
-      totalLessonsAtRequest === null
-        ? null
-        : {
-            secondsWatched: secondsWatchedAtRequest,
-            lessonsCompleted: lessonsCompletedAtRequest,
-            totalLessons: totalLessonsAtRequest,
-          };
+    // Show what it was judged on beside the same measures now. Refund Requests
+    // raised before the snapshot existed fall back to watch time measured as
+    // of asking; lessons completed then can't be recovered.
+    const judgedOn = {
+      secondsWatched:
+        secondsWatchedAtRequest ??
+        Math.round(
+          getSecondsWatched(refundRequest.learnerId, refundRequest.courseId, {
+            asOf: refundRequest.requestedAt,
+          })
+        ),
+      lessonsCompleted: lessonsCompletedAtRequest,
+      totalLessons: totalLessonsAtRequest,
+    };
 
     return {
       ...rest,
-      isOwnRefundRequest: refundRequest.learnerId === userId,
+      isOwnRefundRequest: isOwnRefundRequest(refundRequest, userId),
       daysSincePurchase: {
-        then: calendarDaysBetween(
-          refundRequest.purchasedAt,
+        then: daysSincePurchase(
+          new Date(refundRequest.purchasedAt),
           new Date(refundRequest.requestedAt)
         ),
-        now: calendarDaysBetween(refundRequest.purchasedAt, now),
+        now: daysSincePurchase(new Date(refundRequest.purchasedAt), now),
       },
       evidence: compareRefundEvidence(
         judgedOn,
@@ -224,13 +231,9 @@ export async function action({ request }: Route.ActionArgs) {
   );
 
   if (!resolution.ok) {
-    // Deciding your own Refund Request is forbidden, not a conflict.
-    const status =
-      refundRequest.learnerId === userId &&
-      refundRequest.status === RefundStatus.Requested
-        ? 403
-        : 409;
-    throw data(resolution.error, { status });
+    throw data(resolution.error, {
+      status: REFUSAL_STATUS[resolution.kind],
+    });
   }
 
   const { update } = resolution;
@@ -548,9 +551,9 @@ function RecentlyDecided({
                       Note to the Learner: {refundRequest.declineNote}
                     </p>
                   )}
-                  {refundRequest.staffNote && (
+                  {refundRequest.internalNote && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Internal note: {refundRequest.staffNote}
+                      Internal note: {refundRequest.internalNote}
                     </p>
                   )}
                 </li>

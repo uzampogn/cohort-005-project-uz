@@ -252,7 +252,7 @@ export const refunds = sqliteTable(
     // Set only on a decline: the Admin's explanation, which the Learner reads.
     declineNote: text("decline_note"),
     // Optional, set on approve: an Admin's internal note. Never shown to the Learner.
-    staffNote: text("staff_note"),
+    internalNote: text("internal_note"),
     // What Refund Eligibility was judged on when the Learner asked. Null on
     // Refund Requests raised before the snapshot existed.
     secondsWatchedAtRequest: integer("seconds_watched_at_request"),

@@ -24,28 +24,54 @@ export type RefundResolutionUpdate = {
   resolvedByUserId: number;
   declineNote: string | null;
   /** The Admin's internal note on an approval. Never shown to the Learner. */
-  staffNote: string | null;
+  internalNote: string | null;
 };
 
 export type RefundResolution =
   | { ok: true; update: RefundResolutionUpdate }
-  | { ok: false; error: string };
+  | { ok: false; kind: RefundRefusal; error: string };
+
+/** Why a decision on a Refund Request was refused. */
+export type RefundRefusal =
+  | "already-resolved"
+  | "own-refund-request"
+  | "missing-decline-note";
+
+/** An Admin may not decide a Refund Request on their own Purchase. */
+export function isOwnRefundRequest(
+  request: Pick<RefundRequestToResolve, "learnerId">,
+  adminId: number
+): boolean {
+  return request.learnerId === adminId;
+}
 
 export function resolveRefundRequest(
   request: RefundRequestToResolve,
   decision: RefundDecision
 ): RefundResolution {
   if (request.status !== RefundStatus.Requested) {
-    return { ok: false, error: "This Refund Request has already been resolved." };
+    return {
+      ok: false,
+      kind: "already-resolved",
+      error: "This Refund Request has already been resolved.",
+    };
   }
 
-  if (request.learnerId === decision.resolvedByUserId) {
-    return { ok: false, error: "You cannot decide your own Refund Request." };
+  if (isOwnRefundRequest(request, decision.resolvedByUserId)) {
+    return {
+      ok: false,
+      kind: "own-refund-request",
+      error: "You cannot decide your own Refund Request.",
+    };
   }
 
   if (decision.decision === "decline") {
     if (decision.note.trim() === "") {
-      return { ok: false, error: "A decline needs a note the Learner can read." };
+      return {
+        ok: false,
+        kind: "missing-decline-note",
+        error: "A decline needs a note the Learner can read.",
+      };
     }
     return {
       ok: true,
@@ -55,7 +81,7 @@ export function resolveRefundRequest(
         resolvedAt: decision.resolvedAt,
         resolvedByUserId: decision.resolvedByUserId,
         declineNote: decision.note,
-        staffNote: null,
+        internalNote: null,
       },
     };
   }
@@ -68,7 +94,7 @@ export function resolveRefundRequest(
       resolvedAt: decision.resolvedAt,
       resolvedByUserId: decision.resolvedByUserId,
       declineNote: null,
-      staffNote: decision.note?.trim() || null,
+      internalNote: decision.note?.trim() || null,
     },
   };
 }

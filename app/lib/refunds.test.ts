@@ -4,6 +4,7 @@ import {
   buildRefundRequestEmail,
   checkRefundEligibility,
   compareRefundEvidence,
+  daysSincePurchase,
   type RefundEligibilityFacts,
 } from "./refunds";
 
@@ -344,6 +345,21 @@ describe("compareRefundEvidence", () => {
     });
   });
 
+  it("still compares watch time when only that could be measured as it was", () => {
+    const comparison = compareRefundEvidence(
+      { secondsWatched: 600, lessonsCompleted: null, totalLessons: null },
+      { secondsWatched: 1500, lessonsCompleted: 4, totalLessons: 12 }
+    );
+
+    expect(comparison.secondsWatched.changed).toBe(true);
+    expect(comparison.lessonsCompleted).toEqual({
+      then: null,
+      now: 4,
+      changed: false,
+    });
+    expect(comparison.anyChanged).toBe(true);
+  });
+
   it("flags nothing for a Refund Request raised before the snapshot was kept", () => {
     const comparison = compareRefundEvidence(null, {
       secondsWatched: 5000,
@@ -357,5 +373,20 @@ describe("compareRefundEvidence", () => {
       changed: false,
     });
     expect(comparison.anyChanged).toBe(false);
+  });
+});
+
+describe("daysSincePurchase", () => {
+  it("counts the day of the Purchase as day zero", () => {
+    expect(daysSincePurchase(purchasedAt, new Date(2026, 0, 1, 23, 59))).toBe(0);
+  });
+
+  it("counts whole calendar days, not 24-hour stretches", () => {
+    // Bought at 23:00, and half an hour later it is the next calendar day.
+    expect(daysSincePurchase(purchasedAt, new Date(2026, 0, 2, 0, 30))).toBe(1);
+  });
+
+  it("agrees with the window: the last day of it is day fourteen", () => {
+    expect(daysSincePurchase(purchasedAt, new Date(2026, 0, 15, 12, 0))).toBe(14);
   });
 });

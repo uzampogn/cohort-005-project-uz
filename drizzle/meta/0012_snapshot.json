@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3595ad75-5aa7-4b91-97a1-2f304310e695",
+  "id": "79467a4b-f34f-455e-8fa0-2cec851c6326",
   "prevId": "a12013ce-f514-4ea5-9239-a72ab9255594",
   "tables": {
     "categories": {
@@ -1305,8 +1305,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "staff_note": {
-          "name": "staff_note",
+        "internal_note": {
+          "name": "internal_note",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

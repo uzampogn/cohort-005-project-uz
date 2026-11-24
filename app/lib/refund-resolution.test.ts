@@ -28,7 +28,7 @@ describe("resolveRefundRequest", () => {
         resolvedAt: NOW,
         resolvedByUserId: ADMIN_ID,
         declineNote: null,
-        staffNote: null,
+        internalNote: null,
       },
     });
   });
@@ -49,7 +49,7 @@ describe("resolveRefundRequest", () => {
         resolvedAt: NOW,
         resolvedByUserId: ADMIN_ID,
         declineNote: "You completed most of the course before asking.",
-        staffNote: null,
+        internalNote: null,
       },
     });
   });
@@ -70,7 +70,7 @@ describe("resolveRefundRequest", () => {
         resolvedAt: NOW,
         resolvedByUserId: ADMIN_ID,
         declineNote: null,
-        staffNote: "Duplicate purchase — bought twice by mistake.",
+        internalNote: "Duplicate purchase — bought twice by mistake.",
       },
     });
   });
@@ -83,7 +83,7 @@ describe("resolveRefundRequest", () => {
       resolvedAt: NOW,
     });
 
-    expect(result.ok && result.update.staffNote).toBe(null);
+    expect(result.ok && result.update.internalNote).toBe(null);
   });
 
   it("a decline without a note is refused", () => {
@@ -96,6 +96,7 @@ describe("resolveRefundRequest", () => {
 
     expect(result).toEqual({
       ok: false,
+      kind: "missing-decline-note",
       error: "A decline needs a note the Learner can read.",
     });
   });
@@ -108,6 +109,7 @@ describe("resolveRefundRequest", () => {
 
     expect(result).toEqual({
       ok: false,
+      kind: "already-resolved",
       error: "This Refund Request has already been resolved.",
     });
   });
@@ -125,6 +127,7 @@ describe("resolveRefundRequest", () => {
 
     expect(result).toEqual({
       ok: false,
+      kind: "already-resolved",
       error: "This Refund Request has already been resolved.",
     });
   });
@@ -141,6 +144,7 @@ describe("resolveRefundRequest", () => {
 
       expect(result).toEqual({
         ok: false,
+        kind: "own-refund-request",
         error: "You cannot decide your own Refund Request.",
       });
     });
@@ -155,6 +159,7 @@ describe("resolveRefundRequest", () => {
 
       expect(result).toEqual({
         ok: false,
+        kind: "own-refund-request",
         error: "You cannot decide your own Refund Request.",
       });
     });
